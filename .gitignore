@@ -1,0 +1,17 @@
+# Зависимости
+node_modules/
+
+# Сборка
+dist/
+release/
+*.tsbuildinfo
+
+# Большие бинарники и модели (качаются/собираются скриптом, см. README)
+resources/bin/
+resources/models/
+public/models/
+build-tools/
+
+# Системное
+.DS_Store
+*.log
