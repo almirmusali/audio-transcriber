@@ -12,6 +12,10 @@ resources/models/
 public/models/
 build-tools/
 
+# Промежуточные файлы иконки (оставляем только icon.svg и icon.icns)
+build/icon.iconset/
+build/icon_1024.png
+
 # Системное
 .DS_Store
 *.log
