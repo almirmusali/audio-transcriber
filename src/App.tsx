@@ -17,6 +17,7 @@ interface FinalResult {
   srt: string
   segments: Chunk[]
   savedPath: string | null
+  recordingPath?: string | null
 }
 
 // code — для нативного whisper.cpp, name — для transformers.js в браузере.
@@ -127,6 +128,7 @@ export default function App() {
         srt: res.srt,
         segments: parseSrt(res.srt),
         savedPath: res.savedPath,
+        recordingPath: res.recordingPath ?? null,
       })
       setPhase('done')
     } catch (err) {
@@ -499,6 +501,18 @@ export default function App() {
             </div>
           )}
 
+          {final.recordingPath && (
+            <div className="saved-note">
+              🎙️ Запись сохранена в «Документы/Транскрибер»
+              <button
+                className="link-btn"
+                onClick={() => desktop!.reveal(final.recordingPath!)}
+              >
+                Показать в Finder
+              </button>
+            </div>
+          )}
+
           {segments.length > 0 ? (
             <div className="segments">
               {segments.map((c, i) => (
@@ -515,6 +529,13 @@ export default function App() {
       )}
 
       <footer>
+        {isDesktop && (
+          <div className="footer-actions">
+            <button className="link-btn" onClick={() => desktop!.openRecordings()}>
+              📂 Папка записей
+            </button>
+          </div>
+        )}
         {isDesktop
           ? 'whisper.cpp · Metal · модель Whisper large-v3-turbo от OpenAI'
           : 'transformers.js · модели Whisper от OpenAI'}

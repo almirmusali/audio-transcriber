@@ -24,6 +24,38 @@ function resourcePath(...p) {
 const MODEL = resourcePath('models', 'ggml-large-v3-turbo-q5_0.bin')
 const WHISPER = resourcePath('bin', 'whisper-cli')
 
+// Папка для сохранения записей с микрофона.
+function recordingsDir() {
+  const dir = path.join(app.getPath('documents'), 'Транскрибер')
+  fs.mkdirSync(dir, { recursive: true })
+  return dir
+}
+
+// Метка времени для имени файла: 2026-07-02 14-30-15
+function stamp() {
+  const d = new Date()
+  const p = (n) => String(n).padStart(2, '0')
+  return (
+    `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
+    `${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}`
+  )
+}
+
+// Конвертация записи в m4a (AAC) — компактный, открывается на Mac нативно.
+function toM4a(input, outFile) {
+  return new Promise((resolve, reject) => {
+    const ff = spawn(findFfmpeg(), [
+      '-y', '-i', input, '-c:a', 'aac', '-b:a', '128k', outFile,
+    ])
+    let err = ''
+    ff.stderr.on('data', (d) => (err += d))
+    ff.on('error', reject)
+    ff.on('close', (code) =>
+      code === 0 ? resolve() : reject(new Error('ffmpeg m4a: ' + err.slice(-300))),
+    )
+  })
+}
+
 function findFfmpeg() {
   const candidates = [
     resourcePath('bin', 'ffmpeg'),
@@ -123,9 +155,18 @@ ipcMain.handle('transcribe', async (e, payload) => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'transcriber-'))
   try {
     let input = payload.path
+    let recordingPath = null
     if (!input && payload.bytes) {
       input = path.join(tmp, payload.name || 'audio.bin')
       fs.writeFileSync(input, Buffer.from(payload.bytes))
+      // Это запись с микрофона — сохраняем её в отдельную папку сразу,
+      // до распознавания, чтобы аудио не потерялось при обрыве.
+      try {
+        recordingPath = path.join(recordingsDir(), `Запись ${stamp()}.m4a`)
+        await toM4a(input, recordingPath)
+      } catch {
+        recordingPath = null
+      }
     }
     if (!input) throw new Error('Нет входного файла')
 
@@ -180,16 +221,18 @@ ipcMain.handle('transcribe', async (e, payload) => {
     // Авто-сохранение TXT в Загрузки (аналог авто-скачивания в браузере).
     let savedPath = null
     try {
-      const base =
-        (payload.name || path.basename(input)).replace(/\.[^.]+$/, '') ||
-        'transcript'
+      // Для записи имя TXT совпадает с именем аудио (общая метка времени).
+      const base = recordingPath
+        ? path.basename(recordingPath).replace(/\.[^.]+$/, '')
+        : (payload.name || path.basename(input)).replace(/\.[^.]+$/, '') ||
+          'transcript'
       savedPath = path.join(app.getPath('downloads'), base + '.txt')
       fs.writeFileSync(savedPath, text, 'utf8')
     } catch {
       /* не критично */
     }
 
-    return { text, srt, savedPath }
+    return { text, srt, savedPath, recordingPath }
   } finally {
     try {
       fs.rmSync(tmp, { recursive: true, force: true })
@@ -208,4 +251,9 @@ ipcMain.handle('save-as', async (_e, defaultName, content) => {
 
 ipcMain.handle('reveal', async (_e, p) => {
   if (p && fs.existsSync(p)) shell.showItemInFolder(p)
+})
+
+// Открыть папку с записями в Finder.
+ipcMain.handle('open-recordings', async () => {
+  await shell.openPath(recordingsDir())
 })

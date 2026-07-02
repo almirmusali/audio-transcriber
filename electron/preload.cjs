@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('desktop', {
   saveAs: (defaultName, content) =>
     ipcRenderer.invoke('save-as', defaultName, content),
   reveal: (filePath) => ipcRenderer.invoke('reveal', filePath),
+  openRecordings: () => ipcRenderer.invoke('open-recordings'),
   // Подписки на ход выполнения.
   onStatus: (cb) => {
     const h = (_e, v) => cb(v)

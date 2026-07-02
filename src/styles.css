@@ -364,3 +364,7 @@ footer {
 footer a {
   color: var(--accent);
 }
+
+.footer-actions {
+  margin-bottom: 12px;
+}

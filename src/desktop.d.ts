@@ -9,6 +9,7 @@ export interface TranscribeResult {
   text: string
   srt: string
   savedPath: string | null
+  recordingPath?: string | null
 }
 
 export interface DesktopApi {
@@ -19,6 +20,7 @@ export interface DesktopApi {
   transcribe: (payload: TranscribePayload) => Promise<TranscribeResult>
   saveAs: (defaultName: string, content: string) => Promise<string | null>
   reveal: (filePath: string) => Promise<void>
+  openRecordings: () => Promise<void>
   onStatus: (cb: (v: string) => void) => () => void
   onPartial: (cb: (v: string) => void) => () => void
   onProgress: (cb: (v: number) => void) => () => void
