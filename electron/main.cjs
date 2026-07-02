@@ -1,4 +1,12 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron')
+const {
+  app,
+  BrowserWindow,
+  ipcMain,
+  dialog,
+  shell,
+  session,
+  systemPreferences,
+} = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
 const os = require('node:os')
@@ -46,10 +54,30 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Разрешаем рендереру запрашивать микрофон (иначе Electron блокирует getUserMedia).
+  const allow = ['media', 'audioCapture', 'microphone']
+  session.defaultSession.setPermissionRequestHandler((_wc, perm, cb) =>
+    cb(allow.includes(perm)),
+  )
+  session.defaultSession.setPermissionCheckHandler((_wc, perm) =>
+    allow.includes(perm),
+  )
+
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+})
+
+// Запрос доступа к микрофону на уровне macOS (TCC). Вызывается перед записью.
+ipcMain.handle('request-mic', async () => {
+  if (process.platform !== 'darwin') return true
+  const status = systemPreferences.getMediaAccessStatus('microphone')
+  if (status === 'granted') return true
+  if (status === 'denied') return 'denied'
+  // 'not-determined' → показываем системный запрос
+  const ok = await systemPreferences.askForMediaAccess('microphone')
+  return ok ? true : 'denied'
 })
 
 app.on('window-all-closed', () => {

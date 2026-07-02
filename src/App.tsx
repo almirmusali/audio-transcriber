@@ -242,6 +242,19 @@ export default function App() {
       mediaRef.current?.stop()
       return
     }
+    // В нативном приложении сначала спрашиваем доступ к микрофону у macOS.
+    if (isDesktop) {
+      const r = await desktop!.requestMic()
+      if (r === 'denied') {
+        setError(
+          'Нет доступа к микрофону. Открой Системные настройки → ' +
+            'Конфиденциальность и безопасность → Микрофон и включи «Транскрибер», ' +
+            'затем перезапусти приложение.',
+        )
+        setPhase('error')
+        return
+      }
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const rec = new MediaRecorder(stream)

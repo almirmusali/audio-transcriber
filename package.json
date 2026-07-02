@@ -52,7 +52,10 @@
       "target": "dmg",
       "category": "public.app-category.productivity",
       "icon": "build/icon.icns",
-      "identity": null
+      "identity": null,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Транскрибер использует микрофон для записи и распознавания речи."
+      }
     }
   }
 }

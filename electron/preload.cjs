@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('desktop', {
     }
   },
   // Запуск распознавания. payload: { path?, bytes?, name?, language }
+  // Запрос доступа к микрофону (macOS TCC). Возвращает true | 'denied'.
+  requestMic: () => ipcRenderer.invoke('request-mic'),
   transcribe: (payload) => ipcRenderer.invoke('transcribe', payload),
   saveAs: (defaultName, content) =>
     ipcRenderer.invoke('save-as', defaultName, content),

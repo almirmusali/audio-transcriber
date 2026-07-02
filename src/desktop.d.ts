@@ -15,6 +15,7 @@ export interface DesktopApi {
   isDesktop: true
   openFile: () => Promise<string | null>
   pathForFile: (file: File) => string | null
+  requestMic: () => Promise<true | 'denied'>
   transcribe: (payload: TranscribePayload) => Promise<TranscribeResult>
   saveAs: (defaultName: string, content: string) => Promise<string | null>
   reveal: (filePath: string) => Promise<void>
