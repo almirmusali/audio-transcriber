@@ -18,6 +18,9 @@ interface FinalResult {
   segments: Chunk[]
   savedPath: string | null
   recordingPath?: string | null
+  mdPath?: string | null
+  fileCount?: number
+  failed?: number
 }
 
 // code — для нативного whisper.cpp, name — для transformers.js в браузере.
@@ -64,6 +67,11 @@ export default function App() {
   const [elapsed, setElapsed] = useState(0)
   const [partial, setPartial] = useState('')
   const [pct, setPct] = useState<number | null>(null)
+  const [course, setCourse] = useState<{
+    index: number
+    total: number
+    name: string
+  } | null>(null)
 
   const progress = useModelProgress()
   const workerRef = useRef<Worker | null>(null)
@@ -87,6 +95,7 @@ export default function App() {
     setFinal(null)
     setPartial('')
     setPct(null)
+    setCourse(null)
     setStatus(isDesktop ? 'Подготовка…' : 'Декодирование аудио…')
     setFileName(name)
     progress.reset()
@@ -106,6 +115,7 @@ export default function App() {
       desktop.onStatus((v) => setStatus(v)),
       desktop.onPartial((v) => setPartial(v)),
       desktop.onProgress((v) => setPct(v)),
+      desktop.onCourseProgress((v) => setCourse(v)),
     ]
     return () => offs.forEach((off) => off())
   }, [desktop])
@@ -129,6 +139,35 @@ export default function App() {
         segments: parseSrt(res.srt),
         savedPath: res.savedPath,
         recordingPath: res.recordingPath ?? null,
+      })
+      setPhase('done')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+      setPhase('error')
+    } finally {
+      stopTimer()
+    }
+  }
+
+  // ===== Папочный режим: транскрипция всего курса в один .md =====
+  async function pickFolder() {
+    const dir = await desktop!.openFolder()
+    if (dir) runCourse(dir)
+  }
+
+  async function runCourse(dir: string) {
+    const name = dir.split('/').pop() || 'Курс'
+    beginUI(name)
+    try {
+      const res = await desktop!.transcribeCourse({ dir, language: lang.code })
+      setFinal({
+        text: res.md,
+        srt: '',
+        segments: [],
+        savedPath: null,
+        mdPath: res.mdPath,
+        fileCount: res.fileCount,
+        failed: res.failed,
       })
       setPhase('done')
     } catch (err) {
@@ -387,6 +426,11 @@ export default function App() {
           >
             {recording ? '⏹ Остановить запись' : '🎤 Записать с микрофона'}
           </button>
+          {isDesktop && (
+            <button className="btn" onClick={pickFolder} disabled={busy}>
+              📚 Папка курса → MD
+            </button>
+          )}
         </div>
         <p className="hint">mp3, wav, m4a, ogg, mp4, mov и другие форматы</p>
       </section>
@@ -398,6 +442,17 @@ export default function App() {
             <div className="status">
               {status} {fileName && <span className="muted">· {fileName}</span>}
             </div>
+            {course && (
+              <div className="bar">
+                <div
+                  className="bar-fill"
+                  style={{ width: `${(course.index / course.total) * 100}%` }}
+                />
+                <span className="bar-label">
+                  Файл {course.index} из {course.total}
+                </span>
+              </div>
+            )}
             {!isDesktop && progress.active && progress.overall < 100 && (
               <div className="bar">
                 <div
@@ -488,6 +543,25 @@ export default function App() {
               )}
             </div>
           </div>
+
+          {final.mdPath && (
+            <div className="saved-note">
+              ✓ Документ курса сохранён · файлов: {final.fileCount}
+              {final.failed ? ` · не распознано: ${final.failed}` : ''}
+              <button
+                className="link-btn"
+                onClick={() => desktop!.openPath(final.mdPath!)}
+              >
+                Открыть .md
+              </button>
+              <button
+                className="link-btn"
+                onClick={() => desktop!.reveal(final.mdPath!)}
+              >
+                Показать в Finder
+              </button>
+            </div>
+          )}
 
           {final.savedPath && (
             <div className="saved-note">

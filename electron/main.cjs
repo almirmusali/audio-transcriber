@@ -11,6 +11,7 @@ const path = require('node:path')
 const fs = require('node:fs')
 const os = require('node:os')
 const { spawn } = require('node:child_process')
+const { MEDIA_EXT, walkMedia, buildCourseMarkdown } = require('./course.cjs')
 
 const isDev = !app.isPackaged
 const DEV_URL = 'http://localhost:5180'
@@ -136,19 +137,78 @@ function toWav(input, outWav) {
 ipcMain.handle('open-file', async () => {
   const r = await dialog.showOpenDialog(win, {
     properties: ['openFile'],
-    filters: [
-      {
-        name: 'Аудио и видео',
-        extensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'oga', 'opus', 'flac',
-          'mp4', 'mov', 'm4v', 'webm', 'mkv', 'wma', 'aiff', 'aif'],
-      },
-    ],
+    filters: [{ name: 'Аудио и видео', extensions: MEDIA_EXT }],
   })
   return r.canceled ? null : r.filePaths[0]
 })
 
+ipcMain.handle('open-folder', async () => {
+  const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] })
+  return r.canceled ? null : r.filePaths[0]
+})
+
+ipcMain.handle('open-path', async (_e, p) => {
+  if (p && fs.existsSync(p)) await shell.openPath(p)
+})
+
 // Строка таймкода в выводе whisper-cli: [00:00:00.000 --> 00:00:05.000]   текст
 const TS = /\[\d{2}:\d{2}:\d{2}\.\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}\.\d{3}\]\s*(.*)/
+
+// Прогоняет готовый wav через whisper-cli. onSegment(acc), onProgress(pct%).
+function runWhisper(wav, language, tmp, onSegment, onProgress) {
+  return new Promise((resolve, reject) => {
+    const outPrefix = path.join(tmp, 'out')
+    const cp = spawn(WHISPER, [
+      '-m', MODEL, '-f', wav, '-l', language,
+      '-otxt', '-osrt', '-of', outPrefix, '-pp',
+    ])
+    let acc = ''
+    let stderr = ''
+    cp.stdout.on('data', (d) => {
+      for (const line of d.toString().split('\n')) {
+        const m = line.match(TS)
+        if (m && m[1].trim()) {
+          acc += (acc ? '\n' : '') + m[1].trim()
+          onSegment && onSegment(acc)
+        }
+      }
+    })
+    cp.stderr.on('data', (d) => {
+      stderr += d
+      const ms = d.toString().match(/progress\s*=\s*(\d+)%/)
+      if (ms) onProgress && onProgress(parseInt(ms[1], 10))
+    })
+    cp.on('error', reject)
+    cp.on('close', (code) => {
+      if (code !== 0)
+        return reject(new Error('whisper-cli (' + code + '): ' + stderr.slice(-500)))
+      const txtFile = outPrefix + '.txt'
+      const srtFile = outPrefix + '.srt'
+      const text = fs.existsSync(txtFile)
+        ? fs.readFileSync(txtFile, 'utf8').trim()
+        : acc
+      const srt = fs.existsSync(srtFile) ? fs.readFileSync(srtFile, 'utf8') : ''
+      resolve({ text, srt })
+    })
+  })
+}
+
+// Полный цикл для одного файла: конвертация в wav + распознавание.
+async function transcribeInput(input, language, onSegment, onProgress) {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'transcriber-'))
+  try {
+    const wav = path.join(tmp, 'audio.wav')
+    await toWav(input, wav)
+    return await runWhisper(wav, language, tmp, onSegment, onProgress)
+  } finally {
+    try {
+      fs.rmSync(tmp, { recursive: true, force: true })
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 
 ipcMain.handle('transcribe', async (e, payload) => {
   const language = payload.language && payload.language !== '' ? payload.language : 'auto'
@@ -170,53 +230,13 @@ ipcMain.handle('transcribe', async (e, payload) => {
     }
     if (!input) throw new Error('Нет входного файла')
 
-    e.sender.send('status', 'Конвертация аудио…')
-    const wav = path.join(tmp, 'audio.wav')
-    await toWav(input, wav)
-
     e.sender.send('status', 'Распознавание речи…')
-    const outPrefix = path.join(tmp, 'out')
-    const args = [
-      '-m', MODEL,
-      '-f', wav,
-      '-l', language,
-      '-otxt', '-osrt',
-      '-of', outPrefix,
-      '-pp',
-    ]
-
-    const streamed = await new Promise((resolve, reject) => {
-      const cp = spawn(WHISPER, args)
-      let acc = ''
-      let stderr = ''
-      cp.stdout.on('data', (d) => {
-        for (const line of d.toString().split('\n')) {
-          const m = line.match(TS)
-          if (m && m[1].trim()) {
-            acc += (acc ? '\n' : '') + m[1].trim()
-            e.sender.send('partial', acc)
-          }
-        }
-      })
-      cp.stderr.on('data', (d) => {
-        stderr += d
-        const ms = d.toString().match(/progress\s*=\s*(\d+)%/)
-        if (ms) e.sender.send('progress', parseInt(ms[1], 10))
-      })
-      cp.on('error', reject)
-      cp.on('close', (code) =>
-        code === 0
-          ? resolve(acc)
-          : reject(new Error('whisper-cli (' + code + '): ' + stderr.slice(-500))),
-      )
-    })
-
-    const txtFile = outPrefix + '.txt'
-    const srtFile = outPrefix + '.srt'
-    const text = fs.existsSync(txtFile)
-      ? fs.readFileSync(txtFile, 'utf8').trim()
-      : streamed
-    const srt = fs.existsSync(srtFile) ? fs.readFileSync(srtFile, 'utf8') : ''
+    const { text, srt } = await transcribeInput(
+      input,
+      language,
+      (acc) => e.sender.send('partial', acc),
+      (pct) => e.sender.send('progress', pct),
+    )
 
     // Авто-сохранение TXT в Загрузки (аналог авто-скачивания в браузере).
     let savedPath = null
@@ -256,4 +276,53 @@ ipcMain.handle('reveal', async (_e, p) => {
 // Открыть папку с записями в Finder.
 ipcMain.handle('open-recordings', async () => {
   await shell.openPath(recordingsDir())
+})
+
+// Распознаёт всю папку курса → единый .md с оглавлением.
+ipcMain.handle('transcribe-course', async (e, payload) => {
+  const dir = payload.dir
+  const language =
+    payload.language && payload.language !== '' ? payload.language : 'auto'
+  if (!dir || !fs.existsSync(dir)) throw new Error('Папка не найдена')
+
+  const files = walkMedia(dir)
+  if (files.length === 0)
+    throw new Error('В папке (и подпапках) не найдено аудио или видео файлов')
+
+  const courseName = path.basename(dir)
+  const total = files.length
+  const results = new Map()
+
+  for (let i = 0; i < total; i++) {
+    const abs = files[i]
+    const rel = path.relative(dir, abs)
+    e.sender.send('status', `Файл ${i + 1}/${total} · ${rel}`)
+    e.sender.send('partial', '')
+    e.sender.send('progress', 0)
+    e.sender.send('course-progress', { index: i + 1, total, name: rel })
+    try {
+      const r = await transcribeInput(
+        abs,
+        language,
+        (acc) => e.sender.send('partial', acc),
+        (pct) => e.sender.send('progress', pct),
+      )
+      results.set(abs, r)
+    } catch (err) {
+      results.set(abs, { text: '', srt: '', error: err.message || String(err) })
+    }
+  }
+
+  const md = buildCourseMarkdown(dir, courseName, files, results)
+  let mdPath = path.join(dir, `${courseName} — транскрипция.md`)
+  try {
+    fs.writeFileSync(mdPath, md, 'utf8')
+  } catch {
+    // папка недоступна для записи → сохраняем в Документы/Транскрибер
+    mdPath = path.join(recordingsDir(), `${courseName} — транскрипция.md`)
+    fs.writeFileSync(mdPath, md, 'utf8')
+  }
+
+  const failed = [...results.values()].filter((r) => r.error).length
+  return { md, mdPath, fileCount: total, failed }
 })

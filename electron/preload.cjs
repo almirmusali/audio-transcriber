@@ -16,6 +16,10 @@ contextBridge.exposeInMainWorld('desktop', {
   // Запрос доступа к микрофону (macOS TCC). Возвращает true | 'denied'.
   requestMic: () => ipcRenderer.invoke('request-mic'),
   transcribe: (payload) => ipcRenderer.invoke('transcribe', payload),
+  // Папочный режим: выбор папки курса и распознавание всей папки в один .md
+  openFolder: () => ipcRenderer.invoke('open-folder'),
+  transcribeCourse: (payload) => ipcRenderer.invoke('transcribe-course', payload),
+  openPath: (p) => ipcRenderer.invoke('open-path', p),
   saveAs: (defaultName, content) =>
     ipcRenderer.invoke('save-as', defaultName, content),
   reveal: (filePath) => ipcRenderer.invoke('reveal', filePath),
@@ -35,5 +39,10 @@ contextBridge.exposeInMainWorld('desktop', {
     const h = (_e, v) => cb(v)
     ipcRenderer.on('progress', h)
     return () => ipcRenderer.removeListener('progress', h)
+  },
+  onCourseProgress: (cb) => {
+    const h = (_e, v) => cb(v)
+    ipcRenderer.on('course-progress', h)
+    return () => ipcRenderer.removeListener('course-progress', h)
   },
 })
