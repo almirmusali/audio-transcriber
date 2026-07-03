@@ -65,6 +65,7 @@ export default function App() {
   const [hasWebGPU, setHasWebGPU] = useState<boolean | null>(null)
   const [recording, setRecording] = useState(false)
   const [elapsed, setElapsed] = useState(0)
+  const [fast, setFast] = useState(false)
   const [partial, setPartial] = useState('')
   const [pct, setPct] = useState<number | null>(null)
   const [course, setCourse] = useState<{
@@ -132,6 +133,7 @@ export default function App() {
         bytes: payload.bytes,
         name: payload.name,
         language: lang.code,
+        fast,
       })
       setFinal({
         text: res.text,
@@ -159,7 +161,11 @@ export default function App() {
     const name = dir.split('/').pop() || 'Курс'
     beginUI(name)
     try {
-      const res = await desktop!.transcribeCourse({ dir, language: lang.code })
+      const res = await desktop!.transcribeCourse({
+        dir,
+        language: lang.code,
+        fast,
+      })
       setFinal({
         text: res.md,
         srt: '',
@@ -381,6 +387,17 @@ export default function App() {
             ))}
           </select>
         </div>
+        {isDesktop && (
+          <label className="toggle" title="Жадное декодирование: быстрее ~2× почти без потерь на чистой речи (лекции, вебинары)">
+            <input
+              type="checkbox"
+              checked={fast}
+              onChange={(e) => setFast(e.target.checked)}
+              disabled={busy}
+            />
+            <span>🚀 Быстрый режим</span>
+          </label>
+        )}
         <div className="badge">
           {isDesktop
             ? '⚡ Metal · Apple Silicon'

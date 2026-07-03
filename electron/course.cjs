@@ -1,4 +1,4 @@
-// Папочная логика курса: обход медиафайлов и сборка Markdown с оглавлением.
+// Папочная логика курса: дерево файлов и сборка Markdown с оглавлением.
 // Без зависимостей от Electron — чтобы можно было тестировать напрямую.
 const path = require('node:path')
 const fs = require('node:fs')
@@ -6,48 +6,60 @@ const fs = require('node:fs')
 const MEDIA_EXT = ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'oga', 'opus', 'flac',
   'mp4', 'mov', 'm4v', 'webm', 'mkv', 'wma', 'aiff', 'aif']
 
-// Натуральная сортировка: "2" раньше "10".
+// Натуральная сортировка: "2" раньше "10", "5-6" между 5 и 7.
 function natCompare(a, b) {
   return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
 }
 
-// Рекурсивно собирает медиафайлы, сохраняя порядок и структуру папок.
-function walkMedia(dir) {
-  const out = []
-  let entries
+// Строит дерево папки. В каждом узле entries отсортированы натурально,
+// папки и файлы вперемешку — чтобы сохранить реальный порядок курса.
+function buildTree(dir) {
+  const node = { entries: [] }
+  let ents
   try {
-    entries = fs.readdirSync(dir, { withFileTypes: true })
+    ents = fs.readdirSync(dir, { withFileTypes: true })
   } catch {
-    return out
+    return node
   }
-  entries.sort((a, b) => natCompare(a.name, b.name))
-  for (const ent of entries) {
-    if (ent.name.startsWith('.')) continue
-    const full = path.join(dir, ent.name)
-    if (ent.isDirectory()) out.push(...walkMedia(full))
-    else {
-      const ext = path.extname(ent.name).slice(1).toLowerCase()
-      if (MEDIA_EXT.includes(ext)) out.push(full)
+  ents = ents
+    .filter((e) => !e.name.startsWith('.'))
+    .sort((a, b) => natCompare(a.name, b.name))
+  for (const e of ents) {
+    const abs = path.join(dir, e.name)
+    if (e.isDirectory()) {
+      node.entries.push({ type: 'dir', name: e.name, abs, node: buildTree(abs) })
+    } else {
+      const ext = path.extname(e.name).slice(1).toLowerCase()
+      node.entries.push({
+        type: 'file',
+        name: e.name,
+        abs,
+        isMedia: MEDIA_EXT.includes(ext),
+      })
     }
+  }
+  return node
+}
+
+// Плоский список медиафайлов в порядке обхода (для распознавания).
+function collectMedia(node, out = []) {
+  for (const e of node.entries) {
+    if (e.type === 'dir') collectMedia(e.node, out)
+    else if (e.isMedia) out.push(e.abs)
   }
   return out
 }
 
+// Есть ли в поддереве хоть какой-то файл (чтобы не показывать пустые папки).
+function nodeHasFiles(node) {
+  return node.entries.some(
+    (e) => e.type === 'file' || (e.type === 'dir' && nodeHasFiles(e.node)),
+  )
+}
+
 // Собирает единый Markdown курса с оглавлением по структуре папок.
 // results: Map<absPath, { text, srt, error? }>
-function buildCourseMarkdown(root, courseName, files, results) {
-  const tree = { dirs: new Map(), files: [] }
-  for (const abs of files) {
-    const parts = path.relative(root, abs).split(path.sep)
-    let node = tree
-    for (let i = 0; i < parts.length - 1; i++) {
-      const p = parts[i]
-      if (!node.dirs.has(p)) node.dirs.set(p, { dirs: new Map(), files: [] })
-      node = node.dirs.get(p)
-    }
-    node.files.push({ name: parts[parts.length - 1], abs })
-  }
-
+function buildCourseMarkdown(root, courseName, tree, results) {
   let idc = 0
   const nextId = () => 's' + ++idc
   const toc = []
@@ -55,35 +67,47 @@ function buildCourseMarkdown(root, courseName, files, results) {
   const stripExt = (n) => n.replace(/\.[^.]+$/, '')
 
   function render(node, depth) {
-    for (const name of [...node.dirs.keys()].sort(natCompare)) {
-      const id = nextId()
-      const level = Math.min(depth + 2, 6)
-      toc.push(`${'  '.repeat(depth)}- [📁 ${name}](#${id})`)
-      body.push(`\n<a id="${id}"></a>\n\n${'#'.repeat(level)} 📁 ${name}\n`)
-      render(node.dirs.get(name), depth + 1)
-    }
-    for (const f of node.files.sort((a, b) => natCompare(a.name, b.name))) {
-      const id = nextId()
-      const level = Math.min(depth + 2, 6)
-      const title = stripExt(f.name)
-      toc.push(`${'  '.repeat(depth)}- [${title}](#${id})`)
-      const r = results.get(f.abs) || {}
-      body.push(`\n<a id="${id}"></a>\n\n${'#'.repeat(level)} ${title}\n`)
-      body.push(`\n*Файл: \`${path.relative(root, f.abs)}\`*\n`)
-      if (r.error) body.push(`\n> ⚠️ Не удалось распознать: ${r.error}\n`)
-      else if (!r.text) body.push(`\n> _(пусто)_\n`)
-      else body.push(`\n${r.text}\n`)
+    for (const e of node.entries) {
+      if (e.type === 'dir') {
+        if (!nodeHasFiles(e.node)) continue // пропускаем пустые папки
+        const id = nextId()
+        const level = Math.min(depth + 2, 6)
+        toc.push(`${'  '.repeat(depth)}- [📁 ${e.name}](#${id})`)
+        body.push(`\n<a id="${id}"></a>\n\n${'#'.repeat(level)} 📁 ${e.name}\n`)
+        render(e.node, depth + 1)
+      } else if (e.isMedia) {
+        const id = nextId()
+        const level = Math.min(depth + 2, 6)
+        const title = stripExt(e.name)
+        toc.push(`${'  '.repeat(depth)}- [${title}](#${id})`)
+        const r = results.get(e.abs) || {}
+        body.push(`\n<a id="${id}"></a>\n\n${'#'.repeat(level)} ${title}\n`)
+        body.push(`\n*Файл: \`${path.relative(root, e.abs)}\`*\n`)
+        if (r.error) body.push(`\n> ⚠️ Не удалось распознать: ${r.error}\n`)
+        else if (!r.text) body.push(`\n> _(пусто)_\n`)
+        else body.push(`\n${r.text}\n`)
+      } else {
+        // Не медиа (PDF, DOCX и т.п.) — материал курса, показываем ссылкой.
+        body.push(`\n> 📎 Материал: \`${path.relative(root, e.abs)}\`\n`)
+      }
     }
   }
   render(tree, 0)
 
+  const mediaCount = collectMedia(tree).length
   return (
     `# ${courseName}\n\n` +
-    `> Транскрипция курса · файлов: ${files.length} · создано в Транскрибере\n\n` +
+    `> Транскрипция курса · аудио/видео: ${mediaCount} · создано в Транскрибере\n\n` +
     `## Оглавление\n\n${toc.join('\n')}\n\n---\n` +
     body.join('\n') +
     '\n'
   )
 }
 
-module.exports = { MEDIA_EXT, natCompare, walkMedia, buildCourseMarkdown }
+module.exports = {
+  MEDIA_EXT,
+  natCompare,
+  buildTree,
+  collectMedia,
+  buildCourseMarkdown,
+}

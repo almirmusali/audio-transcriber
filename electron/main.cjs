@@ -11,7 +11,12 @@ const path = require('node:path')
 const fs = require('node:fs')
 const os = require('node:os')
 const { spawn } = require('node:child_process')
-const { MEDIA_EXT, walkMedia, buildCourseMarkdown } = require('./course.cjs')
+const {
+  MEDIA_EXT,
+  buildTree,
+  collectMedia,
+  buildCourseMarkdown,
+} = require('./course.cjs')
 
 const isDev = !app.isPackaged
 const DEV_URL = 'http://localhost:5180'
@@ -155,13 +160,16 @@ ipcMain.handle('open-path', async (_e, p) => {
 const TS = /\[\d{2}:\d{2}:\d{2}\.\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}\.\d{3}\]\s*(.*)/
 
 // Прогоняет готовый wav через whisper-cli. onSegment(acc), onProgress(pct%).
-function runWhisper(wav, language, tmp, onSegment, onProgress) {
+// fast: жадное декодирование (-bs 1 -bo 1 -nf) — быстрее ~2× на чистой речи.
+function runWhisper(wav, language, tmp, onSegment, onProgress, fast) {
   return new Promise((resolve, reject) => {
     const outPrefix = path.join(tmp, 'out')
-    const cp = spawn(WHISPER, [
+    const args = [
       '-m', MODEL, '-f', wav, '-l', language,
       '-otxt', '-osrt', '-of', outPrefix, '-pp',
-    ])
+    ]
+    if (fast) args.push('-bs', '1', '-bo', '1', '-nf')
+    const cp = spawn(WHISPER, args)
     let acc = ''
     let stderr = ''
     cp.stdout.on('data', (d) => {
@@ -194,12 +202,12 @@ function runWhisper(wav, language, tmp, onSegment, onProgress) {
 }
 
 // Полный цикл для одного файла: конвертация в wav + распознавание.
-async function transcribeInput(input, language, onSegment, onProgress) {
+async function transcribeInput(input, language, onSegment, onProgress, fast) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'transcriber-'))
   try {
     const wav = path.join(tmp, 'audio.wav')
     await toWav(input, wav)
-    return await runWhisper(wav, language, tmp, onSegment, onProgress)
+    return await runWhisper(wav, language, tmp, onSegment, onProgress, fast)
   } finally {
     try {
       fs.rmSync(tmp, { recursive: true, force: true })
@@ -236,6 +244,7 @@ ipcMain.handle('transcribe', async (e, payload) => {
       language,
       (acc) => e.sender.send('partial', acc),
       (pct) => e.sender.send('progress', pct),
+      !!payload.fast,
     )
 
     // Авто-сохранение TXT в Загрузки (аналог авто-скачивания в браузере).
@@ -285,12 +294,14 @@ ipcMain.handle('transcribe-course', async (e, payload) => {
     payload.language && payload.language !== '' ? payload.language : 'auto'
   if (!dir || !fs.existsSync(dir)) throw new Error('Папка не найдена')
 
-  const files = walkMedia(dir)
+  const tree = buildTree(dir)
+  const files = collectMedia(tree)
   if (files.length === 0)
     throw new Error('В папке (и подпапках) не найдено аудио или видео файлов')
 
   const courseName = path.basename(dir)
   const total = files.length
+  const fast = !!payload.fast
   const results = new Map()
 
   for (let i = 0; i < total; i++) {
@@ -306,6 +317,7 @@ ipcMain.handle('transcribe-course', async (e, payload) => {
         language,
         (acc) => e.sender.send('partial', acc),
         (pct) => e.sender.send('progress', pct),
+        fast,
       )
       results.set(abs, r)
     } catch (err) {
@@ -313,7 +325,7 @@ ipcMain.handle('transcribe-course', async (e, payload) => {
     }
   }
 
-  const md = buildCourseMarkdown(dir, courseName, files, results)
+  const md = buildCourseMarkdown(dir, courseName, tree, results)
   let mdPath = path.join(dir, `${courseName} — транскрипция.md`)
   try {
     fs.writeFileSync(mdPath, md, 'utf8')

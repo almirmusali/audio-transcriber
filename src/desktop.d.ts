@@ -3,6 +3,7 @@ export interface TranscribePayload {
   bytes?: ArrayBuffer
   name?: string
   language: string
+  fast?: boolean
 }
 
 export interface TranscribeResult {
@@ -35,6 +36,7 @@ export interface DesktopApi {
   transcribeCourse: (payload: {
     dir: string
     language: string
+    fast?: boolean
   }) => Promise<CourseResult>
   openPath: (p: string) => Promise<void>
   saveAs: (defaultName: string, content: string) => Promise<string | null>
