@@ -8,6 +8,7 @@ import {
   parseSrt,
   download,
 } from './format'
+import { STRINGS, UI_LANGS, type UiLang } from './i18n'
 
 type Phase = 'idle' | 'working' | 'done' | 'error'
 type ModelKey = 'turbo' | 'base'
@@ -24,8 +25,9 @@ interface FinalResult {
 }
 
 // code — для нативного whisper.cpp, name — для transformers.js в браузере.
+// autoDetect (code '') — метка берётся из локализации.
 const LANGUAGES: { code: string; name: string; label: string }[] = [
-  { code: '', name: '', label: 'Автоопределение' },
+  { code: '', name: '', label: '' },
   { code: 'ru', name: 'russian', label: 'Русский' },
   { code: 'en', name: 'english', label: 'English' },
   { code: 'uk', name: 'ukrainian', label: 'Українська' },
@@ -54,6 +56,22 @@ function useModelProgress() {
 export default function App() {
   const desktop = typeof window !== 'undefined' ? window.desktop : undefined
   const isDesktop = !!desktop
+
+  const [uiLang, setUiLang] = useState<UiLang>(() => {
+    const saved =
+      typeof localStorage !== 'undefined'
+        ? (localStorage.getItem('uiLang') as UiLang | null)
+        : null
+    return saved === 'id' || saved === 'ru' ? saved : 'ru'
+  })
+  const t = STRINGS[uiLang]
+  useEffect(() => {
+    try {
+      localStorage.setItem('uiLang', uiLang)
+    } catch {
+      /* ignore */
+    }
+  }, [uiLang])
 
   const [phase, setPhase] = useState<Phase>('idle')
   const [status, setStatus] = useState('')
@@ -97,7 +115,7 @@ export default function App() {
     setPartial('')
     setPct(null)
     setCourse(null)
-    setStatus(isDesktop ? 'Подготовка…' : 'Декодирование аудио…')
+    setStatus(isDesktop ? t.preparing : t.decoding)
     setFileName(name)
     progress.reset()
     startRef.current = Date.now()
@@ -158,7 +176,7 @@ export default function App() {
   }
 
   async function runCourse(dir: string) {
-    const name = dir.split('/').pop() || 'Курс'
+    const name = dir.split('/').pop() || t.course
     beginUI(name)
     try {
       const res = await desktop!.transcribeCourse({
@@ -249,10 +267,7 @@ export default function App() {
         [pcm.buffer],
       )
     } catch (err) {
-      setError(
-        'Не удалось декодировать файл. ' +
-          (err instanceof Error ? err.message : ''),
-      )
+      setError(t.decodeError + (err instanceof Error ? err.message : ''))
       setPhase('error')
       stopTimer()
     }
@@ -293,11 +308,7 @@ export default function App() {
     if (isDesktop) {
       const r = await desktop!.requestMic()
       if (r === 'denied') {
-        setError(
-          'Нет доступа к микрофону. Открой Системные настройки → ' +
-            'Конфиденциальность и безопасность → Микрофон и включи «Транскрибер», ' +
-            'затем перезапусти приложение.',
-        )
+        setError(t.micDenied)
         setPhase('error')
         return
       }
@@ -313,16 +324,16 @@ export default function App() {
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
         if (isDesktop) {
           const bytes = await blob.arrayBuffer()
-          runDesktop({ bytes, name: 'Запись с микрофона.webm' })
+          runDesktop({ bytes, name: t.micName + '.webm' })
         } else {
-          runBrowser(blob, 'Запись с микрофона')
+          runBrowser(blob, t.micName)
         }
       }
       rec.start()
       mediaRef.current = rec
       setRecording(true)
     } catch {
-      setError('Нет доступа к микрофону.')
+      setError(t.micNoAccess)
       setPhase('error')
     }
   }
@@ -337,29 +348,37 @@ export default function App() {
   const plainText = final?.text ?? ''
   const busy = phase === 'working'
 
+  // Локализованная строка статуса (курс → «Файл N из M · имя»).
+  const statusText = course
+    ? `${t.fileN(course.index, course.total)} · ${course.name}`
+    : status === 'recognizing'
+      ? t.recognizing
+      : status
+
   return (
     <div className="app">
       <header>
-        <h1>🎙️ Транскрибер</h1>
-        <p className="sub">
-          {isDesktop ? (
-            <>
-              Аудио → текст нативно на Mac. Модель <b>Whisper large-v3-turbo</b>,
-              ускорение Metal. Всё локально.
-            </>
-          ) : (
-            <>
-              Аудио → текст прямо в браузере. Модель <b>Whisper</b>, ничего не
-              уходит на сервер.
-            </>
-          )}
-        </p>
+        <div className="header-row">
+          <h1>🎙️ Транскрибер</h1>
+          <div className="lang-switch">
+            {UI_LANGS.map((l) => (
+              <button
+                key={l.code}
+                className={`lang-btn ${uiLang === l.code ? 'active' : ''}`}
+                onClick={() => setUiLang(l.code)}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <p className="sub">{t.subtitle}</p>
       </header>
 
       <section className="controls">
         {!isDesktop && (
           <div className="field">
-            <label>Модель</label>
+            <label>{t.model}</label>
             <select
               value={model}
               onChange={(e) => setModel(e.target.value as ModelKey)}
@@ -374,7 +393,7 @@ export default function App() {
           </div>
         )}
         <div className="field">
-          <label>Язык</label>
+          <label>{t.language}</label>
           <select
             value={langCode}
             onChange={(e) => setLangCode(e.target.value)}
@@ -382,25 +401,25 @@ export default function App() {
           >
             {LANGUAGES.map((l) => (
               <option key={l.code} value={l.code}>
-                {l.label}
+                {l.code === '' ? t.autoDetect : l.label}
               </option>
             ))}
           </select>
         </div>
         {isDesktop && (
-          <label className="toggle" title="Жадное декодирование: быстрее ~2× почти без потерь на чистой речи (лекции, вебинары)">
+          <label className="toggle" title={t.fastTitle}>
             <input
               type="checkbox"
               checked={fast}
               onChange={(e) => setFast(e.target.checked)}
               disabled={busy}
             />
-            <span>🚀 Быстрый режим</span>
+            <span>{t.fastMode}</span>
           </label>
         )}
         <div className="badge">
           {isDesktop
-            ? '⚡ Metal · Apple Silicon'
+            ? t.badge
             : hasWebGPU === null
               ? 'Проверка GPU…'
               : hasWebGPU
@@ -414,7 +433,7 @@ export default function App() {
         onDrop={onDrop}
         onDragOver={(e) => e.preventDefault()}
       >
-        <p>Перетащи файл сюда или</p>
+        <p>{t.dropHere}</p>
         <div className="actions">
           {isDesktop ? (
             <button
@@ -422,11 +441,11 @@ export default function App() {
               onClick={pickFile}
               disabled={busy}
             >
-              Выбрать файл
+              {t.chooseFile}
             </button>
           ) : (
             <label className={`btn primary ${busy ? 'disabled' : ''}`}>
-              Выбрать файл
+              {t.chooseFile}
               <input
                 type="file"
                 accept="audio/*,video/*"
@@ -441,15 +460,15 @@ export default function App() {
             onClick={toggleRecording}
             disabled={busy && !recording}
           >
-            {recording ? '⏹ Остановить запись' : '🎤 Записать с микрофона'}
+            {recording ? t.stopRecord : t.record}
           </button>
           {isDesktop && (
             <button className="btn" onClick={pickFolder} disabled={busy}>
-              📚 Папка курса → MD
+              {t.courseFolder}
             </button>
           )}
         </div>
-        <p className="hint">mp3, wav, m4a, ogg, mp4, mov и другие форматы</p>
+        <p className="hint">{t.formats}</p>
       </section>
 
       {busy && (
@@ -457,7 +476,8 @@ export default function App() {
           <div className="spinner" />
           <div className="progress-info">
             <div className="status">
-              {status} {fileName && <span className="muted">· {fileName}</span>}
+              {statusText}{' '}
+              {fileName && <span className="muted">· {fileName}</span>}
             </div>
             {course && (
               <div className="bar">
@@ -466,28 +486,21 @@ export default function App() {
                   style={{ width: `${(course.index / course.total) * 100}%` }}
                 />
                 <span className="bar-label">
-                  Файл {course.index} из {course.total}
-                </span>
-              </div>
-            )}
-            {!isDesktop && progress.active && progress.overall < 100 && (
-              <div className="bar">
-                <div
-                  className="bar-fill"
-                  style={{ width: `${progress.overall}%` }}
-                />
-                <span className="bar-label">
-                  Загрузка модели {Math.round(progress.overall)}%
+                  {t.fileN(course.index, course.total)}
                 </span>
               </div>
             )}
             {pct !== null && pct < 100 && (
               <div className="bar">
                 <div className="bar-fill" style={{ width: `${pct}%` }} />
-                <span className="bar-label">Распознавание {pct}%</span>
+                <span className="bar-label">
+                  {t.recognitionLabel} {pct}%
+                </span>
               </div>
             )}
-            <div className="muted small">прошло {formatTime(elapsed)}</div>
+            <div className="muted small">
+              {t.elapsed} {formatTime(elapsed)}
+            </div>
           </div>
         </section>
       )}
@@ -495,8 +508,8 @@ export default function App() {
       {busy && partial && (
         <section className="result live">
           <div className="result-head">
-            <h2>Распознаётся…</h2>
-            <span className="muted small">текст появляется в реальном времени</span>
+            <h2>{t.live}</h2>
+            <span className="muted small">{t.liveHint}</span>
           </div>
           <p className="plain">
             {partial}
@@ -511,13 +524,13 @@ export default function App() {
           {partial.trim() && (
             <section className="result">
               <div className="result-head">
-                <h2>Распознано до обрыва</h2>
+                <h2>{t.beforeError}</h2>
                 <div className="export">
                   <button
                     className="btn"
                     onClick={() => navigator.clipboard.writeText(partial.trim())}
                   >
-                    📋 Копировать
+                    {t.copy}
                   </button>
                   <button
                     className="btn"
@@ -536,13 +549,13 @@ export default function App() {
       {phase === 'done' && final && (
         <section className="result">
           <div className="result-head">
-            <h2>Результат</h2>
+            <h2>{t.result}</h2>
             <div className="export">
               <button
                 className="btn"
                 onClick={() => navigator.clipboard.writeText(plainText)}
               >
-                📋 Копировать
+                {t.copy}
               </button>
               <button
                 className="btn"
@@ -563,43 +576,43 @@ export default function App() {
 
           {final.mdPath && (
             <div className="saved-note">
-              ✓ Документ курса сохранён · файлов: {final.fileCount}
-              {final.failed ? ` · не распознано: ${final.failed}` : ''}
+              {t.courseSaved(final.fileCount)}
+              {final.failed ? t.notRecognized(final.failed) : ''}
               <button
                 className="link-btn"
                 onClick={() => desktop!.openPath(final.mdPath!)}
               >
-                Открыть .md
+                {t.openMd}
               </button>
               <button
                 className="link-btn"
                 onClick={() => desktop!.reveal(final.mdPath!)}
               >
-                Показать в Finder
+                {t.showFinder}
               </button>
             </div>
           )}
 
           {final.savedPath && (
             <div className="saved-note">
-              ✓ TXT сохранён в Загрузки
+              {t.txtSaved}
               <button
                 className="link-btn"
                 onClick={() => desktop!.reveal(final.savedPath!)}
               >
-                Показать в Finder
+                {t.showFinder}
               </button>
             </div>
           )}
 
           {final.recordingPath && (
             <div className="saved-note">
-              🎙️ Запись сохранена в «Документы/Транскрибер»
+              {t.recordingSaved}
               <button
                 className="link-btn"
                 onClick={() => desktop!.reveal(final.recordingPath!)}
               >
-                Показать в Finder
+                {t.showFinder}
               </button>
             </div>
           )}
@@ -623,13 +636,11 @@ export default function App() {
         {isDesktop && (
           <div className="footer-actions">
             <button className="link-btn" onClick={() => desktop!.openRecordings()}>
-              📂 Папка записей
+              {t.recordingsFolder}
             </button>
           </div>
         )}
-        {isDesktop
-          ? 'whisper.cpp · Metal · модель Whisper large-v3-turbo от OpenAI'
-          : 'transformers.js · модели Whisper от OpenAI'}
+        {isDesktop ? t.footer : 'transformers.js · модели Whisper от OpenAI'}
       </footer>
     </div>
   )

@@ -238,7 +238,8 @@ ipcMain.handle('transcribe', async (e, payload) => {
     }
     if (!input) throw new Error('Нет входного файла')
 
-    e.sender.send('status', 'Распознавание речи…')
+    // 'recognizing' — токен, рендерер сам локализует.
+    e.sender.send('status', 'recognizing')
     const { text, srt } = await transcribeInput(
       input,
       language,
