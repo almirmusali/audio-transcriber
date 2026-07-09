@@ -44,6 +44,8 @@ interface Strings {
   fileN: (i: number, total: number) => string
   courseSaved: (count: number | undefined) => string
   notRecognized: (n: number) => string
+  stop: string
+  stats: (seconds: number, chars: number) => string
   ai: {
     title: string
     keyPlaceholder: string
@@ -99,6 +101,9 @@ export const STRINGS: Record<UiLang, Strings> = {
     fileN: (i, total) => `Файл ${i} из ${total}`,
     courseSaved: (count) => `✓ Документ курса сохранён · файлов: ${count}`,
     notRecognized: (n) => ` · не распознано: ${n}`,
+    stop: '⏹ Остановить',
+    stats: (s, c) =>
+      `⏱ ${Math.floor(s / 3600)} ч ${Math.round((s % 3600) / 60)} мин · ${c.toLocaleString('ru-RU')} знаков`,
     ai: {
       title: '🤖 Обработка через ИИ (по промпту)',
       keyPlaceholder: 'Anthropic API-ключ (sk-ant-…)',
@@ -174,6 +179,9 @@ export const STRINGS: Record<UiLang, Strings> = {
     fileN: (i, total) => `Berkas ${i} dari ${total}`,
     courseSaved: (count) => `✓ Dokumen kursus disimpan · berkas: ${count}`,
     notRecognized: (n) => ` · tidak dikenali: ${n}`,
+    stop: '⏹ Hentikan',
+    stats: (s, c) =>
+      `⏱ ${Math.floor(s / 3600)} j ${Math.round((s % 3600) / 60)} mnt · ${c.toLocaleString('id-ID')} karakter`,
     ai: {
       title: '🤖 Pemrosesan dengan AI (via perintah)',
       keyPlaceholder: 'Kunci API Anthropic (sk-ant-…)',

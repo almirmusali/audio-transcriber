@@ -11,12 +11,16 @@ export interface TranscribeResult {
   srt: string
   savedPath: string | null
   recordingPath?: string | null
+  seconds?: number
+  chars?: number
 }
 
 export interface CourseProgress {
   index: number
   total: number
   name: string
+  seconds?: number
+  chars?: number
 }
 
 export interface CourseResult {
@@ -24,6 +28,9 @@ export interface CourseResult {
   mdPath: string
   fileCount: number
   failed: number
+  seconds?: number
+  chars?: number
+  cancelled?: boolean
 }
 
 export interface DesktopApi {
@@ -39,6 +46,7 @@ export interface DesktopApi {
     fast?: boolean
   }) => Promise<CourseResult>
   openPath: (p: string) => Promise<void>
+  cancel: () => Promise<void>
   aiProcess: (payload: {
     apiKey: string
     model: string

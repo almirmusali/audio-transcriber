@@ -494,3 +494,22 @@ footer a {
 .ai-result .result-head h3 {
   font-size: 15px;
 }
+
+/* Кнопка остановки и статистика */
+.progress {
+  position: relative;
+}
+.btn.stop {
+  align-self: center;
+  background: var(--danger);
+  border: none;
+  color: #fff;
+  flex-shrink: 0;
+}
+.stats-badge {
+  align-self: center;
+  font-size: 12px;
+  color: var(--muted);
+  margin-right: 6px;
+  white-space: nowrap;
+}

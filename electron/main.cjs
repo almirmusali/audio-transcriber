@@ -50,9 +50,9 @@ function stamp() {
 // Конвертация записи в m4a (AAC) — компактный, открывается на Mac нативно.
 function toM4a(input, outFile) {
   return new Promise((resolve, reject) => {
-    const ff = spawn(findFfmpeg(), [
+    const ff = track(spawn(findFfmpeg(), [
       '-y', '-i', input, '-c:a', 'aac', '-b:a', '128k', outFile,
-    ])
+    ]))
     let err = ''
     ff.stderr.on('data', (d) => (err += d))
     ff.on('error', reject)
@@ -71,6 +71,42 @@ function findFfmpeg() {
   for (const c of candidates) if (fs.existsSync(c)) return c
   return 'ffmpeg'
 }
+
+// Отмена: трекаем активные процессы (ffmpeg/whisper), чтобы уметь их убить.
+let CANCELLED = false
+const ACTIVE = new Set()
+function track(cp) {
+  ACTIVE.add(cp)
+  const off = () => ACTIVE.delete(cp)
+  cp.on('close', off)
+  cp.on('error', off)
+  return cp
+}
+function killActive() {
+  for (const cp of ACTIVE) {
+    try {
+      cp.kill('SIGKILL')
+    } catch {
+      /* ignore */
+    }
+  }
+  ACTIVE.clear()
+}
+
+// Длительность wav (16кГц, 16 бит, моно) по размеру файла, в секундах.
+function wavSeconds(wav) {
+  try {
+    const size = fs.statSync(wav).size
+    return Math.max(0, (size - 44) / 2 / 16000)
+  } catch {
+    return 0
+  }
+}
+
+ipcMain.handle('cancel-transcribe', async () => {
+  CANCELLED = true
+  killActive()
+})
 
 let win
 function createWindow() {
@@ -125,11 +161,11 @@ app.on('window-all-closed', () => {
 // Конвертация любого аудио/видео в WAV 16кГц моно — формат для whisper.cpp.
 function toWav(input, outWav) {
   return new Promise((resolve, reject) => {
-    const ff = spawn(findFfmpeg(), [
+    const ff = track(spawn(findFfmpeg(), [
       '-y', '-i', input,
       '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le',
       outWav,
-    ])
+    ]))
     let err = ''
     ff.stderr.on('data', (d) => (err += d))
     ff.on('error', reject)
@@ -169,7 +205,7 @@ function runWhisper(wav, language, tmp, onSegment, onProgress, fast) {
       '-otxt', '-osrt', '-of', outPrefix, '-pp',
     ]
     if (fast) args.push('-bs', '1', '-bo', '1', '-nf')
-    const cp = spawn(WHISPER, args)
+    const cp = track(spawn(WHISPER, args))
     let acc = ''
     let stderr = ''
     cp.stdout.on('data', (d) => {
@@ -188,7 +224,8 @@ function runWhisper(wav, language, tmp, onSegment, onProgress, fast) {
     })
     cp.on('error', reject)
     cp.on('close', (code) => {
-      if (code !== 0)
+      // При отмене процесс убит — отдаём то, что успели распознать, без ошибки.
+      if (code !== 0 && !CANCELLED)
         return reject(new Error('whisper-cli (' + code + '): ' + stderr.slice(-500)))
       const txtFile = outPrefix + '.txt'
       const srtFile = outPrefix + '.srt'
@@ -207,7 +244,8 @@ async function transcribeInput(input, language, onSegment, onProgress, fast) {
   try {
     const wav = path.join(tmp, 'audio.wav')
     await toWav(input, wav)
-    return await runWhisper(wav, language, tmp, onSegment, onProgress, fast)
+    const r = await runWhisper(wav, language, tmp, onSegment, onProgress, fast)
+    return { ...r, seconds: wavSeconds(wav) }
   } finally {
     try {
       fs.rmSync(tmp, { recursive: true, force: true })
@@ -219,6 +257,7 @@ async function transcribeInput(input, language, onSegment, onProgress, fast) {
 
 
 ipcMain.handle('transcribe', async (e, payload) => {
+  CANCELLED = false
   const language = payload.language && payload.language !== '' ? payload.language : 'auto'
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'transcriber-'))
   try {
@@ -240,7 +279,7 @@ ipcMain.handle('transcribe', async (e, payload) => {
 
     // 'recognizing' — токен, рендерер сам локализует.
     e.sender.send('status', 'recognizing')
-    const { text, srt } = await transcribeInput(
+    const { text, srt, seconds } = await transcribeInput(
       input,
       language,
       (acc) => e.sender.send('partial', acc),
@@ -262,7 +301,14 @@ ipcMain.handle('transcribe', async (e, payload) => {
       /* не критично */
     }
 
-    return { text, srt, savedPath, recordingPath }
+    return {
+      text,
+      srt,
+      savedPath,
+      recordingPath,
+      seconds,
+      chars: text.length,
+    }
   } finally {
     try {
       fs.rmSync(tmp, { recursive: true, force: true })
@@ -290,6 +336,7 @@ ipcMain.handle('open-recordings', async () => {
 
 // Распознаёт всю папку курса → единый .md с оглавлением.
 ipcMain.handle('transcribe-course', async (e, payload) => {
+  CANCELLED = false
   const dir = payload.dir
   const language =
     payload.language && payload.language !== '' ? payload.language : 'auto'
@@ -304,14 +351,24 @@ ipcMain.handle('transcribe-course', async (e, payload) => {
   const total = files.length
   const fast = !!payload.fast
   const results = new Map()
+  let totalSeconds = 0
+  let totalChars = 0
+  let done = 0
 
   for (let i = 0; i < total; i++) {
+    if (CANCELLED) break
     const abs = files[i]
     const rel = path.relative(dir, abs)
     e.sender.send('status', `Файл ${i + 1}/${total} · ${rel}`)
     e.sender.send('partial', '')
     e.sender.send('progress', 0)
-    e.sender.send('course-progress', { index: i + 1, total, name: rel })
+    e.sender.send('course-progress', {
+      index: i + 1,
+      total,
+      name: rel,
+      seconds: totalSeconds,
+      chars: totalChars,
+    })
     try {
       const r = await transcribeInput(
         abs,
@@ -321,6 +378,9 @@ ipcMain.handle('transcribe-course', async (e, payload) => {
         fast,
       )
       results.set(abs, r)
+      totalSeconds += r.seconds || 0
+      totalChars += (r.text || '').length
+      done++
     } catch (err) {
       results.set(abs, { text: '', srt: '', error: err.message || String(err) })
     }
@@ -337,7 +397,15 @@ ipcMain.handle('transcribe-course', async (e, payload) => {
   }
 
   const failed = [...results.values()].filter((r) => r.error).length
-  return { md, mdPath, fileCount: total, failed }
+  return {
+    md,
+    mdPath,
+    fileCount: done,
+    failed,
+    seconds: totalSeconds,
+    chars: totalChars,
+    cancelled: CANCELLED,
+  }
 })
 
 // AI-обработка транскрипта через Claude API (эндпоинт /v1/messages).

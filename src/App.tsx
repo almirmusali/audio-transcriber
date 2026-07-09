@@ -22,6 +22,8 @@ interface FinalResult {
   mdPath?: string | null
   fileCount?: number
   failed?: number
+  seconds?: number
+  chars?: number
 }
 
 // code — для нативного whisper.cpp, name — для transformers.js в браузере.
@@ -97,6 +99,8 @@ export default function App() {
     index: number
     total: number
     name: string
+    seconds?: number
+    chars?: number
   } | null>(null)
 
   // AI-обработка (Claude API).
@@ -131,6 +135,7 @@ export default function App() {
   const chunksRef = useRef<Blob[]>([])
   const startRef = useRef(0)
   const timerRef = useRef<number | null>(null)
+  const browserSecondsRef = useRef(0)
 
   const lang = LANGUAGES.find((l) => l.code === langCode) ?? LANGUAGES[0]
 
@@ -194,6 +199,8 @@ export default function App() {
         segments: parseSrt(res.srt),
         savedPath: res.savedPath,
         recordingPath: res.recordingPath ?? null,
+        seconds: res.seconds,
+        chars: res.chars ?? res.text.length,
       })
       setPhase('done')
     } catch (err) {
@@ -227,6 +234,8 @@ export default function App() {
         mdPath: res.mdPath,
         fileCount: res.fileCount,
         failed: res.failed,
+        seconds: res.seconds,
+        chars: res.chars,
       })
       setPhase('done')
     } catch (err) {
@@ -258,8 +267,7 @@ export default function App() {
       })
   }, [isDesktop])
 
-  useEffect(() => {
-    if (isDesktop) return
+  function makeWorker() {
     const worker = new Worker(new URL('./worker.ts', import.meta.url), {
       type: 'module',
     })
@@ -277,6 +285,8 @@ export default function App() {
           srt: segs.length ? toSrt(segs) : '',
           segments: segs,
           savedPath: null,
+          seconds: browserSecondsRef.current,
+          chars: text.length,
         })
         setPhase('done')
         stopTimer()
@@ -287,6 +297,12 @@ export default function App() {
         stopTimer()
       }
     })
+    return worker
+  }
+
+  useEffect(() => {
+    if (isDesktop) return
+    const worker = makeWorker()
     workerRef.current = worker
     return () => worker.terminate()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -296,6 +312,7 @@ export default function App() {
     beginUI(name)
     try {
       const pcm = await decodeToPcm(blob)
+      browserSecondsRef.current = pcm.length / 16000
       const device = hasWebGPU ? 'webgpu' : 'wasm'
       workerRef.current!.postMessage(
         { type: 'transcribe', audio: pcm, model, device, language: lang.name || null },
@@ -370,6 +387,20 @@ export default function App() {
     } catch {
       setError(t.micNoAccess)
       setPhase('error')
+    }
+  }
+
+  // ===== Отмена транскрипции =====
+  async function cancel() {
+    if (isDesktop) {
+      // main убьёт процессы, а незавершённый promise вернёт частичный результат.
+      await desktop!.cancel()
+    } else {
+      // В браузере воркер не прервать иначе — терминируем и пересоздаём.
+      workerRef.current?.terminate()
+      workerRef.current = makeWorker()
+      setPhase('idle')
+      stopTimer()
     }
   }
 
@@ -586,8 +617,14 @@ export default function App() {
             )}
             <div className="muted small">
               {t.elapsed} {formatTime(elapsed)}
+              {course && (course.seconds || course.chars) ? (
+                <span> · {t.stats(course.seconds || 0, course.chars || 0)}</span>
+              ) : null}
             </div>
           </div>
+          <button className="btn stop" onClick={cancel}>
+            {t.stop}
+          </button>
         </section>
       )}
 
@@ -637,6 +674,9 @@ export default function App() {
           <div className="result-head">
             <h2>{t.result}</h2>
             <div className="export">
+              <span className="stats-badge">
+                {t.stats(final.seconds || 0, final.chars ?? plainText.length)}
+              </span>
               <button
                 className="btn"
                 onClick={() => navigator.clipboard.writeText(plainText)}
