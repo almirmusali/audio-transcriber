@@ -424,3 +424,73 @@ footer a {
 .footer-actions {
   margin-bottom: 12px;
 }
+
+/* AI-обработка */
+.ai-box {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ai-box .result-head h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.ai-model {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.ai-key {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+}
+.ai-presets {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ai-presets .btn {
+  padding: 8px 14px;
+  font-size: 13px;
+}
+.ai-prompt {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 14px;
+  width: 100%;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.5;
+}
+.ai-actions {
+  display: flex;
+}
+.ai-hint {
+  line-height: 1.5;
+}
+.ai-result {
+  margin-top: 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px;
+}
+.ai-result .result-head h3 {
+  font-size: 15px;
+}

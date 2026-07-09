@@ -39,6 +39,12 @@ export interface DesktopApi {
     fast?: boolean
   }) => Promise<CourseResult>
   openPath: (p: string) => Promise<void>
+  aiProcess: (payload: {
+    apiKey: string
+    model: string
+    prompt: string
+    text: string
+  }) => Promise<string>
   saveAs: (defaultName: string, content: string) => Promise<string | null>
   reveal: (filePath: string) => Promise<void>
   openRecordings: () => Promise<void>

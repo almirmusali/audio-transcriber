@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld('desktop', {
   openFolder: () => ipcRenderer.invoke('open-folder'),
   transcribeCourse: (payload) => ipcRenderer.invoke('transcribe-course', payload),
   openPath: (p) => ipcRenderer.invoke('open-path', p),
+  // AI-обработка транскрипта через Claude API.
+  aiProcess: (payload) => ipcRenderer.invoke('ai-process', payload),
   saveAs: (defaultName, content) =>
     ipcRenderer.invoke('save-as', defaultName, content),
   reveal: (filePath) => ipcRenderer.invoke('reveal', filePath),

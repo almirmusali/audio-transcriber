@@ -44,6 +44,17 @@ interface Strings {
   fileN: (i: number, total: number) => string
   courseSaved: (count: number | undefined) => string
   notRecognized: (n: number) => string
+  ai: {
+    title: string
+    keyPlaceholder: string
+    keyHint: string
+    model: string
+    promptPlaceholder: string
+    run: string
+    running: string
+    resultTitle: string
+    presets: { label: string; prompt: string }[]
+  }
 }
 
 export const STRINGS: Record<UiLang, Strings> = {
@@ -88,6 +99,39 @@ export const STRINGS: Record<UiLang, Strings> = {
     fileN: (i, total) => `Файл ${i} из ${total}`,
     courseSaved: (count) => `✓ Документ курса сохранён · файлов: ${count}`,
     notRecognized: (n) => ` · не распознано: ${n}`,
+    ai: {
+      title: '🤖 Обработка через ИИ (по промпту)',
+      keyPlaceholder: 'Anthropic API-ключ (sk-ant-…)',
+      keyHint:
+        'Ключ хранится только на этом компьютере. Обработка идёт через Claude API — это платно, по вашему ключу (в отличие от бесплатной локальной транскрипции).',
+      model: 'Модель',
+      promptPlaceholder: 'Свой запрос к тексту…',
+      run: '✨ Обработать',
+      running: 'Обрабатываю…',
+      resultTitle: 'Результат ИИ',
+      presets: [
+        {
+          label: 'Саммари',
+          prompt:
+            'Сделай краткое, но ёмкое саммари этого транскрипта: главные мысли и выводы маркированным списком. Отвечай на русском, в Markdown.',
+        },
+        {
+          label: 'Тезисы',
+          prompt:
+            'Выдели ключевые тезисы и важные цитаты из транскрипта. Отвечай на русском, в Markdown.',
+        },
+        {
+          label: 'Конспект',
+          prompt:
+            'Преобразуй транскрипт в структурированный конспект с заголовками и подпунктами (Markdown). Отвечай на русском.',
+        },
+        {
+          label: 'Причесать',
+          prompt:
+            'Отредактируй транскрипт: убери слова-паразиты и повторы, расставь пунктуацию и абзацы, сохрани смысл и стиль речи. Верни готовый текст.',
+        },
+      ],
+    },
   },
   id: {
     subtitle:
@@ -130,5 +174,38 @@ export const STRINGS: Record<UiLang, Strings> = {
     fileN: (i, total) => `Berkas ${i} dari ${total}`,
     courseSaved: (count) => `✓ Dokumen kursus disimpan · berkas: ${count}`,
     notRecognized: (n) => ` · tidak dikenali: ${n}`,
+    ai: {
+      title: '🤖 Pemrosesan dengan AI (via perintah)',
+      keyPlaceholder: 'Kunci API Anthropic (sk-ant-…)',
+      keyHint:
+        'Kunci disimpan hanya di komputer ini. Pemrosesan lewat Claude API — berbayar, memakai kunci Anda (berbeda dari transkripsi lokal yang gratis).',
+      model: 'Model',
+      promptPlaceholder: 'Perintah Anda untuk teks…',
+      run: '✨ Proses',
+      running: 'Memproses…',
+      resultTitle: 'Hasil AI',
+      presets: [
+        {
+          label: 'Ringkasan',
+          prompt:
+            'Buat ringkasan singkat namun padat dari transkrip ini: gagasan dan kesimpulan utama dalam daftar berpoin. Jawab dalam Bahasa Indonesia, format Markdown.',
+        },
+        {
+          label: 'Poin utama',
+          prompt:
+            'Ekstrak poin-poin kunci dan kutipan penting dari transkrip. Jawab dalam Bahasa Indonesia, format Markdown.',
+        },
+        {
+          label: 'Catatan',
+          prompt:
+            'Ubah transkrip menjadi catatan terstruktur dengan judul dan sub-poin (Markdown). Jawab dalam Bahasa Indonesia.',
+        },
+        {
+          label: 'Rapikan',
+          prompt:
+            'Edit transkrip: hapus kata pengisi dan pengulangan, tambahkan tanda baca dan paragraf, pertahankan makna dan gaya. Kembalikan teks yang sudah rapi.',
+        },
+      ],
+    },
   },
 }

@@ -339,3 +339,50 @@ ipcMain.handle('transcribe-course', async (e, payload) => {
   const failed = [...results.values()].filter((r) => r.error).length
   return { md, mdPath, fileCount: total, failed }
 })
+
+// AI-обработка транскрипта через Claude API (эндпоинт /v1/messages).
+// Запрос идёт из main-процесса — нет проблем с CORS, ключ не светится в сети рендерера.
+ipcMain.handle('ai-process', async (_e, payload) => {
+  const { apiKey, model, prompt, text } = payload || {}
+  if (!apiKey) throw new Error('Не указан API-ключ Anthropic')
+  if (!text) throw new Error('Нет текста для обработки')
+
+  let res
+  try {
+    res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: model || 'claude-opus-4-8',
+        max_tokens: 8000,
+        messages: [
+          {
+            role: 'user',
+            content: `${prompt}\n\n=== ТРАНСКРИПТ ===\n${text}`,
+          },
+        ],
+      }),
+    })
+  } catch (err) {
+    throw new Error('Сеть недоступна: ' + (err.message || String(err)))
+  }
+
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw new Error(data?.error?.message || `Ошибка API (${res.status})`)
+  }
+  if (data.stop_reason === 'refusal') {
+    throw new Error('Запрос отклонён моделью по соображениям безопасности')
+  }
+  const out = (data.content || [])
+    .filter((b) => b.type === 'text')
+    .map((b) => b.text)
+    .join('\n')
+    .trim()
+  if (!out) throw new Error('Пустой ответ модели')
+  return out
+})

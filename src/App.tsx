@@ -38,6 +38,13 @@ const LANGUAGES: { code: string; name: string; label: string }[] = [
   { code: 'id', name: 'indonesian', label: 'Bahasa Indonesia' },
 ]
 
+// Модели Claude для AI-обработки (по возрастанию цены сверху вниз наоборот).
+const AI_MODELS = [
+  { id: 'claude-opus-4-8', label: 'Opus 4.8 · лучшая' },
+  { id: 'claude-sonnet-5', label: 'Sonnet 5 · дешевле' },
+  { id: 'claude-haiku-4-5', label: 'Haiku 4.5 · самая дешёвая' },
+]
+
 function useModelProgress() {
   const [files, setFiles] = useState<Record<string, number>>({})
   const reset = () => setFiles({})
@@ -92,6 +99,32 @@ export default function App() {
     name: string
   } | null>(null)
 
+  // AI-обработка (Claude API).
+  const [aiKey, setAiKey] = useState(
+    () => localStorage.getItem('anthropicKey') || '',
+  )
+  const [aiModel, setAiModel] = useState(
+    () => localStorage.getItem('anthropicModel') || 'claude-opus-4-8',
+  )
+  const [aiPrompt, setAiPrompt] = useState('')
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiResult, setAiResult] = useState('')
+  const [aiError, setAiError] = useState('')
+  useEffect(() => {
+    try {
+      localStorage.setItem('anthropicKey', aiKey)
+    } catch {
+      /* ignore */
+    }
+  }, [aiKey])
+  useEffect(() => {
+    try {
+      localStorage.setItem('anthropicModel', aiModel)
+    } catch {
+      /* ignore */
+    }
+  }, [aiModel])
+
   const progress = useModelProgress()
   const workerRef = useRef<Worker | null>(null)
   const mediaRef = useRef<MediaRecorder | null>(null)
@@ -115,6 +148,8 @@ export default function App() {
     setPartial('')
     setPct(null)
     setCourse(null)
+    setAiResult('')
+    setAiError('')
     setStatus(isDesktop ? t.preparing : t.decoding)
     setFileName(name)
     progress.reset()
@@ -342,6 +377,57 @@ export default function App() {
   async function saveText(name: string, content: string) {
     if (isDesktop) await desktop!.saveAs(name, content)
     else download(name, content)
+  }
+
+  // ===== AI-обработка транскрипта через Claude API =====
+  async function runAi(prompt: string) {
+    const text = final?.text ?? ''
+    if (!text || !aiKey || !prompt.trim() || aiBusy) return
+    setAiBusy(true)
+    setAiError('')
+    setAiResult('')
+    try {
+      let out: string
+      if (isDesktop) {
+        out = await desktop!.aiProcess({
+          apiKey: aiKey,
+          model: aiModel,
+          prompt,
+          text,
+        })
+      } else {
+        // В браузере — прямой запрос с заголовком direct-browser-access.
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-api-key': aiKey,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true',
+          },
+          body: JSON.stringify({
+            model: aiModel,
+            max_tokens: 8000,
+            messages: [
+              { role: 'user', content: `${prompt}\n\n=== ТРАНСКРИПТ ===\n${text}` },
+            ],
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok)
+          throw new Error(data?.error?.message || `Ошибка API (${res.status})`)
+        out = (data.content || [])
+          .filter((b: any) => b.type === 'text')
+          .map((b: any) => b.text)
+          .join('\n')
+          .trim()
+      }
+      setAiResult(out)
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setAiBusy(false)
+    }
   }
 
   const segments = final?.segments ?? []
@@ -629,6 +715,94 @@ export default function App() {
           ) : (
             <p className="plain">{plainText}</p>
           )}
+
+          <div className="ai-box">
+            <div className="result-head">
+              <h3>{t.ai.title}</h3>
+              <select
+                className="ai-model"
+                value={aiModel}
+                onChange={(e) => setAiModel(e.target.value)}
+                disabled={aiBusy}
+              >
+                {AI_MODELS.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <input
+              type="password"
+              className="ai-key"
+              placeholder={t.ai.keyPlaceholder}
+              value={aiKey}
+              onChange={(e) => setAiKey(e.target.value)}
+            />
+
+            <div className="ai-presets">
+              {t.ai.presets.map((p) => (
+                <button
+                  key={p.label}
+                  className="btn"
+                  disabled={aiBusy || !aiKey}
+                  onClick={() => {
+                    setAiPrompt(p.prompt)
+                    runAi(p.prompt)
+                  }}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            <textarea
+              className="ai-prompt"
+              placeholder={t.ai.promptPlaceholder}
+              value={aiPrompt}
+              onChange={(e) => setAiPrompt(e.target.value)}
+              disabled={aiBusy}
+              rows={2}
+            />
+
+            <div className="ai-actions">
+              <button
+                className="btn primary"
+                disabled={aiBusy || !aiKey || !aiPrompt.trim()}
+                onClick={() => runAi(aiPrompt)}
+              >
+                {aiBusy ? t.ai.running : t.ai.run}
+              </button>
+            </div>
+
+            <p className="muted small ai-hint">{t.ai.keyHint}</p>
+
+            {aiError && <div className="error">⚠️ {aiError}</div>}
+
+            {aiResult && (
+              <div className="ai-result">
+                <div className="result-head">
+                  <h3>{t.ai.resultTitle}</h3>
+                  <div className="export">
+                    <button
+                      className="btn"
+                      onClick={() => navigator.clipboard.writeText(aiResult)}
+                    >
+                      {t.copy}
+                    </button>
+                    <button
+                      className="btn"
+                      onClick={() => saveText('ai-result.md', aiResult)}
+                    >
+                      ⬇ MD
+                    </button>
+                  </div>
+                </div>
+                <p className="plain">{aiResult}</p>
+              </div>
+            )}
+          </div>
         </section>
       )}
 
