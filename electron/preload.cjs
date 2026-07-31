@@ -22,6 +22,8 @@ contextBridge.exposeInMainWorld('desktop', {
   openPath: (p) => ipcRenderer.invoke('open-path', p),
   // Отмена текущей транскрипции (одиночной или курса).
   cancel: () => ipcRenderer.invoke('cancel-transcribe'),
+  // Копирование в системный буфер обмена.
+  copy: (text) => ipcRenderer.invoke('copy-text', text),
   // AI-обработка транскрипта через Claude API.
   aiProcess: (payload) => ipcRenderer.invoke('ai-process', payload),
   saveAs: (defaultName, content) =>

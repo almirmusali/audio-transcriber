@@ -47,6 +47,7 @@ export interface DesktopApi {
   }) => Promise<CourseResult>
   openPath: (p: string) => Promise<void>
   cancel: () => Promise<void>
+  copy: (text: string) => Promise<void>
   aiProcess: (payload: {
     apiKey: string
     model: string

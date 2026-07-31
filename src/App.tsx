@@ -405,6 +405,30 @@ export default function App() {
   }
 
   // ===== Экспорт результата =====
+  async function copyText(text: string) {
+    if (isDesktop) {
+      await desktop!.copy(text)
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      // Фолбэк, если Clipboard API недоступен.
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      try {
+        document.execCommand('copy')
+      } catch {
+        /* ignore */
+      }
+      document.body.removeChild(ta)
+    }
+  }
+
   async function saveText(name: string, content: string) {
     if (isDesktop) await desktop!.saveAs(name, content)
     else download(name, content)
@@ -651,7 +675,7 @@ export default function App() {
                 <div className="export">
                   <button
                     className="btn"
-                    onClick={() => navigator.clipboard.writeText(partial.trim())}
+                    onClick={() => copyText(partial.trim())}
                   >
                     {t.copy}
                   </button>
@@ -679,7 +703,7 @@ export default function App() {
               </span>
               <button
                 className="btn"
-                onClick={() => navigator.clipboard.writeText(plainText)}
+                onClick={() => copyText(plainText)}
               >
                 {t.copy}
               </button>
@@ -827,7 +851,7 @@ export default function App() {
                   <div className="export">
                     <button
                       className="btn"
-                      onClick={() => navigator.clipboard.writeText(aiResult)}
+                      onClick={() => copyText(aiResult)}
                     >
                       {t.copy}
                     </button>

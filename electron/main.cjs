@@ -6,6 +6,7 @@ const {
   shell,
   session,
   systemPreferences,
+  clipboard,
 } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
@@ -190,6 +191,11 @@ ipcMain.handle('open-folder', async () => {
 
 ipcMain.handle('open-path', async (_e, p) => {
   if (p && fs.existsSync(p)) await shell.openPath(p)
+})
+
+// Копирование в буфер обмена — нативно (navigator.clipboard из file:// ненадёжен).
+ipcMain.handle('copy-text', async (_e, text) => {
+  clipboard.writeText(String(text ?? ''))
 })
 
 // Строка таймкода в выводе whisper-cli: [00:00:00.000 --> 00:00:05.000]   текст
