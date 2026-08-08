@@ -48,6 +48,10 @@ export interface DesktopApi {
   openPath: (p: string) => Promise<void>
   cancel: () => Promise<void>
   copy: (text: string) => Promise<void>
+  recShow: () => void
+  recHide: () => void
+  recUpdate: (state: { paused: boolean; seconds: number }) => void
+  onOverlayCommand: (cb: (action: string) => void) => () => void
   aiProcess: (payload: {
     apiKey: string
     model: string

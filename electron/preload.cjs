@@ -24,6 +24,15 @@ contextBridge.exposeInMainWorld('desktop', {
   cancel: () => ipcRenderer.invoke('cancel-transcribe'),
   // Копирование в системный буфер обмена.
   copy: (text) => ipcRenderer.invoke('copy-text', text),
+  // Плавающая плашка записи (always-on-top).
+  recShow: () => ipcRenderer.send('rec-show'),
+  recHide: () => ipcRenderer.send('rec-hide'),
+  recUpdate: (state) => ipcRenderer.send('rec-update', state),
+  onOverlayCommand: (cb) => {
+    const h = (_e, a) => cb(a)
+    ipcRenderer.on('overlay-command', h)
+    return () => ipcRenderer.removeListener('overlay-command', h)
+  },
   // AI-обработка транскрипта через Claude API.
   aiProcess: (payload) => ipcRenderer.invoke('ai-process', payload),
   saveAs: (defaultName, content) =>

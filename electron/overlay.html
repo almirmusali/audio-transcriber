@@ -1,0 +1,103 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        -webkit-user-select: none;
+        cursor: default;
+      }
+      .pill {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: 44px;
+        margin: 8px;
+        padding: 0 8px 0 14px;
+        border-radius: 22px;
+        background: rgba(20, 26, 43, 0.97);
+        border: 1px solid #2a3450;
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+        -webkit-app-region: drag; /* плашку можно таскать */
+      }
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #ff5f57;
+        animation: pulse 1.2s infinite;
+        flex-shrink: 0;
+      }
+      .dot.paused {
+        background: #8a96b4;
+        animation: none;
+      }
+      .time {
+        color: #e8ecf6;
+        font-variant-numeric: tabular-nums;
+        font-size: 14px;
+        min-width: 42px;
+      }
+      button {
+        -webkit-app-region: no-drag;
+        border: none;
+        border-radius: 15px;
+        height: 30px;
+        min-width: 40px;
+        font-size: 15px;
+        font-weight: 600;
+        color: #fff;
+        cursor: pointer;
+      }
+      .p {
+        background: #6d8bff;
+      }
+      .s {
+        background: #ff5f57;
+      }
+      @keyframes pulse {
+        50% {
+          opacity: 0.3;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="pill">
+      <span class="dot" id="dot"></span>
+      <span class="time" id="time">0:00</span>
+      <button class="p" id="pause" title="Пробел">⏸</button>
+      <button class="s" id="stop">⏹</button>
+    </div>
+    <script>
+      const { ipcRenderer } = require('electron')
+      const dot = document.getElementById('dot')
+      const timeEl = document.getElementById('time')
+      const pauseBtn = document.getElementById('pause')
+      const fmt = (s) => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0')
+
+      ipcRenderer.on('rec-state', (_e, st) => {
+        const paused = !!st.paused
+        dot.className = 'dot' + (paused ? ' paused' : '')
+        pauseBtn.textContent = paused ? '▶' : '⏸'
+        if (typeof st.seconds === 'number') timeEl.textContent = fmt(st.seconds)
+      })
+
+      pauseBtn.onclick = () => ipcRenderer.send('overlay-action', 'toggle-pause')
+      document.getElementById('stop').onclick = () =>
+        ipcRenderer.send('overlay-action', 'stop')
+      window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space') {
+          e.preventDefault()
+          ipcRenderer.send('overlay-action', 'toggle-pause')
+        }
+      })
+    </script>
+  </body>
+</html>

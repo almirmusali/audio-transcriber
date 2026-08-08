@@ -126,6 +126,10 @@ function createWindow() {
   })
   if (isDev) win.loadURL(DEV_URL)
   else win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
+  win.on('closed', () => {
+    if (overlayWin && !overlayWin.isDestroyed()) overlayWin.destroy()
+    overlayWin = null
+  })
 }
 
 app.whenReady().then(() => {
@@ -196,6 +200,59 @@ ipcMain.handle('open-path', async (_e, p) => {
 // Копирование в буфер обмена — нативно (navigator.clipboard из file:// ненадёжен).
 ipcMain.handle('copy-text', async (_e, text) => {
   clipboard.writeText(String(text ?? ''))
+})
+
+// ===== Плавающая плашка записи (always-on-top) =====
+let overlayWin = null
+function createOverlay() {
+  if (overlayWin && !overlayWin.isDestroyed()) return overlayWin
+  overlayWin = new BrowserWindow({
+    width: 240,
+    height: 60,
+    resizable: false,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    show: false,
+    hasShadow: false,
+    fullscreenable: false,
+    webPreferences: { nodeIntegration: true, contextIsolation: false },
+  })
+  overlayWin.setAlwaysOnTop(true, 'screen-saver')
+  overlayWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  overlayWin.loadFile(path.join(__dirname, 'overlay.html'))
+  overlayWin.on('closed', () => {
+    overlayWin = null
+  })
+  return overlayWin
+}
+
+ipcMain.on('rec-show', () => {
+  const w = createOverlay()
+  try {
+    const { screen } = require('electron')
+    const wa = screen.getPrimaryDisplay().workArea
+    w.setPosition(Math.round(wa.x + wa.width / 2 - 120), wa.y + 24)
+  } catch {
+    /* ignore */
+  }
+  w.showInactive()
+})
+
+ipcMain.on('rec-hide', () => {
+  if (overlayWin && !overlayWin.isDestroyed()) overlayWin.hide()
+})
+
+ipcMain.on('rec-update', (_e, st) => {
+  if (overlayWin && !overlayWin.isDestroyed())
+    overlayWin.webContents.send('rec-state', st)
+})
+
+// Команда с плашки → в главное окно (togglePause / stop).
+ipcMain.on('overlay-action', (_e, action) => {
+  if (win && !win.isDestroyed()) win.webContents.send('overlay-command', action)
 })
 
 // Строка таймкода в выводе whisper-cli: [00:00:00.000 --> 00:00:05.000]   текст

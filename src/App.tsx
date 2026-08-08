@@ -140,6 +140,12 @@ export default function App() {
   const browserSecondsRef = useRef(0)
   const recTimerRef = useRef<number | null>(null)
   const pausedRef = useRef(false)
+  const streamRef = useRef<MediaStream | null>(null)
+  const recordingRef = useRef(false)
+  const actionsRef = useRef<{ pause: () => void; stop: () => void }>({
+    pause: () => {},
+    stop: () => {},
+  })
 
   const lang = LANGUAGES.find((l) => l.code === langCode) ?? LANGUAGES[0]
 
@@ -362,10 +368,24 @@ export default function App() {
     }
   }
 
+  // Гарантированно глушим микрофон (иначе индикатор «горит» после ошибки/стопа).
+  function stopStream() {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((tr) => tr.stop())
+      streamRef.current = null
+    }
+  }
+
   async function toggleRecording() {
     if (recording) {
       stopRecTimer()
-      mediaRef.current?.stop()
+      try {
+        mediaRef.current?.stop()
+      } catch {
+        /* ignore */
+      }
+      // Подстраховка: даже если onstop не сработает, микрофон погаснет.
+      setTimeout(stopStream, 400)
       return
     }
     // В нативном приложении сначала спрашиваем доступ к микрофону у macOS.
@@ -377,13 +397,21 @@ export default function App() {
         return
       }
     }
+    let stream: MediaStream
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    } catch {
+      setError(t.micNoAccess)
+      setPhase('error')
+      return
+    }
+    streamRef.current = stream
+    try {
       const rec = new MediaRecorder(stream)
       chunksRef.current = []
       rec.ondataavailable = (ev) => ev.data.size && chunksRef.current.push(ev.data)
       rec.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop())
+        stopStream()
         setRecording(false)
         setPaused(false)
         pausedRef.current = false
@@ -406,8 +434,11 @@ export default function App() {
       recTimerRef.current = window.setInterval(() => {
         if (!pausedRef.current) setRecSeconds((s) => s + 1)
       }, 1000)
-    } catch {
-      setError(t.micNoAccess)
+    } catch (err) {
+      // MediaRecorder не создался/не стартовал — глушим микрофон.
+      stopStream()
+      stopRecTimer()
+      setError(t.micNoAccess + (err instanceof Error ? ' ' + err.message : ''))
       setPhase('error')
     }
   }
@@ -426,6 +457,60 @@ export default function App() {
       setPaused(false)
     }
   }
+
+  // Актуальные ссылки для обработчиков плашки и пробела.
+  recordingRef.current = recording
+  actionsRef.current = {
+    pause: togglePause,
+    stop: () => {
+      if (recording) toggleRecording()
+    },
+  }
+
+  // Пробел ставит/снимает запись с паузы (кроме ввода в поля).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' || !recordingRef.current) return
+      const el = document.activeElement as HTMLElement | null
+      const tag = el?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return
+      e.preventDefault()
+      actionsRef.current.pause()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  // Глушим микрофон при закрытии окна/размонтировании.
+  useEffect(() => {
+    const off = () => stopStream()
+    window.addEventListener('beforeunload', off)
+    return () => {
+      window.removeEventListener('beforeunload', off)
+      stopStream()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Плавающая плашка (desktop): показ/скрытие и обновление состояния.
+  useEffect(() => {
+    if (!isDesktop) return
+    return desktop!.onOverlayCommand((a) => {
+      if (a === 'toggle-pause') actionsRef.current.pause()
+      else if (a === 'stop') actionsRef.current.stop()
+    })
+  }, [isDesktop])
+
+  useEffect(() => {
+    if (!isDesktop) return
+    if (recording) desktop!.recShow()
+    else desktop!.recHide()
+  }, [isDesktop, recording])
+
+  useEffect(() => {
+    if (!isDesktop || !recording) return
+    desktop!.recUpdate({ paused, seconds: recSeconds })
+  }, [isDesktop, recording, paused, recSeconds])
 
   // ===== Отмена транскрипции =====
   async function cancel() {
