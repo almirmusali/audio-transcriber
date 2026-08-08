@@ -91,6 +91,8 @@ export default function App() {
   const [langCode, setLangCode] = useState('')
   const [hasWebGPU, setHasWebGPU] = useState<boolean | null>(null)
   const [recording, setRecording] = useState(false)
+  const [paused, setPaused] = useState(false)
+  const [recSeconds, setRecSeconds] = useState(0)
   const [elapsed, setElapsed] = useState(0)
   const [fast, setFast] = useState(false)
   const [partial, setPartial] = useState('')
@@ -136,6 +138,8 @@ export default function App() {
   const startRef = useRef(0)
   const timerRef = useRef<number | null>(null)
   const browserSecondsRef = useRef(0)
+  const recTimerRef = useRef<number | null>(null)
+  const pausedRef = useRef(false)
 
   const lang = LANGUAGES.find((l) => l.code === langCode) ?? LANGUAGES[0]
 
@@ -351,8 +355,16 @@ export default function App() {
     }
   }
 
+  function stopRecTimer() {
+    if (recTimerRef.current) {
+      clearInterval(recTimerRef.current)
+      recTimerRef.current = null
+    }
+  }
+
   async function toggleRecording() {
     if (recording) {
+      stopRecTimer()
       mediaRef.current?.stop()
       return
     }
@@ -373,6 +385,8 @@ export default function App() {
       rec.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop())
         setRecording(false)
+        setPaused(false)
+        pausedRef.current = false
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
         if (isDesktop) {
           const bytes = await blob.arrayBuffer()
@@ -384,9 +398,32 @@ export default function App() {
       rec.start()
       mediaRef.current = rec
       setRecording(true)
+      setPaused(false)
+      pausedRef.current = false
+      // Таймер записи — тикает, только пока не на паузе.
+      setRecSeconds(0)
+      stopRecTimer()
+      recTimerRef.current = window.setInterval(() => {
+        if (!pausedRef.current) setRecSeconds((s) => s + 1)
+      }, 1000)
     } catch {
       setError(t.micNoAccess)
       setPhase('error')
+    }
+  }
+
+  // Пауза/продолжение записи (аудио и таймер).
+  function togglePause() {
+    const rec = mediaRef.current
+    if (!rec || !recording) return
+    if (rec.state === 'recording') {
+      rec.pause()
+      pausedRef.current = true
+      setPaused(true)
+    } else if (rec.state === 'paused') {
+      rec.resume()
+      pausedRef.current = false
+      setPaused(false)
     }
   }
 
@@ -578,33 +615,46 @@ export default function App() {
         <div className="actions">
           {isDesktop ? (
             <button
-              className={`btn primary ${busy ? 'disabled' : ''}`}
+              className={`btn primary ${busy || recording ? 'disabled' : ''}`}
               onClick={pickFile}
-              disabled={busy}
+              disabled={busy || recording}
             >
               {t.chooseFile}
             </button>
           ) : (
-            <label className={`btn primary ${busy ? 'disabled' : ''}`}>
+            <label
+              className={`btn primary ${busy || recording ? 'disabled' : ''}`}
+            >
               {t.chooseFile}
               <input
                 type="file"
                 accept="audio/*,video/*"
                 onChange={onFileInput}
-                disabled={busy}
+                disabled={busy || recording}
                 hidden
               />
             </label>
           )}
-          <button
-            className={`btn ${recording ? 'rec' : ''}`}
-            onClick={toggleRecording}
-            disabled={busy && !recording}
-          >
-            {recording ? t.stopRecord : t.record}
-          </button>
+          {!recording ? (
+            <button className="btn" onClick={toggleRecording} disabled={busy}>
+              {t.record}
+            </button>
+          ) : (
+            <>
+              <button className="btn" onClick={togglePause}>
+                {paused ? t.resume : t.pause}
+              </button>
+              <button className="btn rec" onClick={toggleRecording}>
+                {t.stopRecord} · {formatTime(recSeconds)}
+              </button>
+            </>
+          )}
           {isDesktop && (
-            <button className="btn" onClick={pickFolder} disabled={busy}>
+            <button
+              className="btn"
+              onClick={pickFolder}
+              disabled={busy || recording}
+            >
               {t.courseFolder}
             </button>
           )}

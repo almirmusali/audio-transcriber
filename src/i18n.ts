@@ -45,6 +45,8 @@ interface Strings {
   courseSaved: (count: number | undefined) => string
   notRecognized: (n: number) => string
   stop: string
+  pause: string
+  resume: string
   stats: (seconds: number, chars: number) => string
   ai: {
     title: string
@@ -102,6 +104,8 @@ export const STRINGS: Record<UiLang, Strings> = {
     courseSaved: (count) => `✓ Документ курса сохранён · файлов: ${count}`,
     notRecognized: (n) => ` · не распознано: ${n}`,
     stop: '⏹ Остановить',
+    pause: '⏸ Пауза',
+    resume: '▶️ Продолжить',
     stats: (s, c) =>
       `⏱ ${Math.floor(s / 3600)} ч ${Math.round((s % 3600) / 60)} мин · ${c.toLocaleString('ru-RU')} знаков`,
     ai: {
@@ -180,6 +184,8 @@ export const STRINGS: Record<UiLang, Strings> = {
     courseSaved: (count) => `✓ Dokumen kursus disimpan · berkas: ${count}`,
     notRecognized: (n) => ` · tidak dikenali: ${n}`,
     stop: '⏹ Hentikan',
+    pause: '⏸ Jeda',
+    resume: '▶️ Lanjutkan',
     stats: (s, c) =>
       `⏱ ${Math.floor(s / 3600)} j ${Math.round((s % 3600) / 60)} mnt · ${c.toLocaleString('id-ID')} karakter`,
     ai: {
