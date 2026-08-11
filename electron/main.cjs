@@ -221,7 +221,12 @@ function createOverlay() {
     webPreferences: { nodeIntegration: true, contextIsolation: false },
   })
   overlayWin.setAlwaysOnTop(true, 'screen-saver')
-  overlayWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  // skipTransformProcessType: без него Electron делает процесс UIElement-приложением
+  // (= app.dock.hide()), и иконка пропадает из дока на всё время сессии.
+  overlayWin.setVisibleOnAllWorkspaces(true, {
+    visibleOnFullScreen: true,
+    skipTransformProcessType: true,
+  })
   overlayWin.loadFile(path.join(__dirname, 'overlay.html'))
   overlayWin.on('closed', () => {
     overlayWin = null
