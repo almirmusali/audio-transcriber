@@ -349,13 +349,17 @@ export default function App() {
     e.target.value = ''
   }
 
-  function onDrop(e: React.DragEvent) {
+  async function onDrop(e: React.DragEvent) {
     e.preventDefault()
     const f = e.dataTransfer.files?.[0]
     if (!f) return
     if (isDesktop) {
       const p = desktop!.pathForFile(f)
-      if (p) runDesktop({ path: p, name: f.name })
+      if (!p) return
+      // Бросили папку → папочный режим (курс в один .md), а не ffmpeg по папке.
+      const kind = await desktop!.pathKind(p)
+      if (kind === 'dir') runCourse(p)
+      else runDesktop({ path: p, name: f.name })
     } else {
       runBrowser(f, f.name)
     }

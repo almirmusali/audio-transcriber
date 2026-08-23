@@ -188,6 +188,15 @@ ipcMain.handle('open-file', async () => {
   return r.canceled ? null : r.filePaths[0]
 })
 
+// Что бросили в окно: папку или файл (drag-and-drop не различает их сам).
+ipcMain.handle('path-kind', async (_e, p) => {
+  try {
+    return fs.statSync(p).isDirectory() ? 'dir' : 'file'
+  } catch {
+    return null
+  }
+})
+
 ipcMain.handle('open-folder', async () => {
   const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] })
   return r.canceled ? null : r.filePaths[0]

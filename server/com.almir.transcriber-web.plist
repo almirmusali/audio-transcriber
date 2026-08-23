@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.almir.transcriber-web</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/node</string>
+    <string>/Users/almirmusalimov/Code/audio-transcriber-main/server/server.mjs</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/almirmusalimov/Code/audio-transcriber-main/server</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PORT</key><string>8773</string>
+    <key>HOST</key><string>127.0.0.1</string>
+    <key>PATH</key><string>/Users/almirmusalimov/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/Users/almirmusalimov/Library/Logs/transcriber-web.log</string>
+  <key>StandardErrorPath</key><string>/Users/almirmusalimov/Library/Logs/transcriber-web.log</string>
+</dict>
+</plist>

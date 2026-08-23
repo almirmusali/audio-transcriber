@@ -40,6 +40,7 @@ export interface DesktopApi {
   requestMic: () => Promise<true | 'denied'>
   transcribe: (payload: TranscribePayload) => Promise<TranscribeResult>
   openFolder: () => Promise<string | null>
+  pathKind: (p: string) => Promise<'dir' | 'file' | null>
   transcribeCourse: (payload: {
     dir: string
     language: string

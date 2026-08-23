@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld('desktop', {
   transcribe: (payload) => ipcRenderer.invoke('transcribe', payload),
   // Папочный режим: выбор папки курса и распознавание всей папки в один .md
   openFolder: () => ipcRenderer.invoke('open-folder'),
+  // 'dir' | 'file' | null — чтобы брошенную папку отправить в папочный режим.
+  pathKind: (p) => ipcRenderer.invoke('path-kind', p),
   transcribeCourse: (payload) => ipcRenderer.invoke('transcribe-course', payload),
   openPath: (p) => ipcRenderer.invoke('open-path', p),
   // Отмена текущей транскрипции (одиночной или курса).

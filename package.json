@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "setup": "bash scripts/setup-native.sh",
     "app": "concurrently -k -s first \"vite\" \"wait-on tcp:5180 && electron .\"",
-    "app:build": "npm run build && electron-builder"
+    "app:build": "npm run build && electron-builder",
+    "web": "node server/server.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "^3.3.3",
