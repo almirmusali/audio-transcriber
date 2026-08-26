@@ -9,6 +9,22 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { buildPrompt, promptArgs } from './whisper-dict.mjs'
+
+// Словарь длиннее лимита whisper — не молчим: тихо обрезанный словарь выглядит
+// как «словарь не работает», и искать это потом дорого.
+let dictWarned = false
+function warnDictionaryOverflow(projectDir) {
+  if (dictWarned) return
+  dictWarned = true
+  const { used, dropped } = buildPrompt(projectDir)
+  if (!dropped.length) return
+  console.warn(
+    `whisper-словарь: влезло ${used.length} терминов, не влезло ${dropped.length} ` +
+      `(начиная с «${dropped[0]}»). Убери лишнее из ~/.config/whisper/dictionary.txt — ` +
+      'хвост списка whisper всё равно не увидит.'
+  )
+}
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const PROJECT = path.join(HERE, '..')
@@ -149,6 +165,9 @@ async function process_(j) {
 
   setStatus(j, 'recognizing', { progress: 0 })
   const args = ['-m', MODEL, '-f', wav, '-l', j.lang || 'auto', '-otxt', '-osrt', '-of', outPrefix, '-pp']
+  // Личный словарь имён и терминов (~/.config/whisper/dictionary.txt).
+  warnDictionaryOverflow(PROJECT)
+  args.push(...promptArgs(PROJECT))
   if (j.fast) args.push('-bs', '1', '-bo', '1', '-nf')
 
   let acc = ''

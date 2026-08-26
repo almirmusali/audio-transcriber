@@ -37,6 +37,10 @@ contextBridge.exposeInMainWorld('desktop', {
   },
   // AI-обработка транскрипта через Claude API.
   aiProcess: (payload) => ipcRenderer.invoke('ai-process', payload),
+  // Личный словарь имён и терминов для whisper (общий файл на все проекты).
+  dictGet: () => ipcRenderer.invoke('dict-get'),
+  dictSet: (text) => ipcRenderer.invoke('dict-set', text),
+  dictReveal: () => ipcRenderer.invoke('dict-reveal'),
   saveAs: (defaultName, content) =>
     ipcRenderer.invoke('save-as', defaultName, content),
   reveal: (filePath) => ipcRenderer.invoke('reveal', filePath),

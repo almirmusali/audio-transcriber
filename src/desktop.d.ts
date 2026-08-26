@@ -59,6 +59,9 @@ export interface DesktopApi {
     prompt: string
     text: string
   }) => Promise<string>
+  dictGet: () => Promise<{ text: string; file: string }>
+  dictSet: (text: string) => Promise<string>
+  dictReveal: () => Promise<void>
   saveAs: (defaultName: string, content: string) => Promise<string | null>
   reveal: (filePath: string) => Promise<void>
   openRecordings: () => Promise<void>

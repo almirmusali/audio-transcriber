@@ -35,6 +35,13 @@ interface Strings {
   txtSaved: string
   recordingSaved: string
   recordingsFolder: string
+  dict: string
+  dictHint: string
+  dictPlaceholder: string
+  dictSave: string
+  dictSaved: string
+  dictFile: string
+  dictShow: string
   footer: string
   micName: string
   course: string
@@ -92,6 +99,15 @@ export const STRINGS: Record<UiLang, Strings> = {
     showFinder: 'Показать в Finder',
     txtSaved: '✓ TXT сохранён в Загрузки',
     recordingSaved: '🎙️ Запись сохранена в «Документы/Транскрибер»',
+    dict: '📖 Словарь имён',
+    dictHint:
+      'Имена, названия проектов и термины — по одному в строке или через запятую. ' +
+      'Whisper получает их подсказкой и перестаёт их коверкать. Файл общий для всех проектов.',
+    dictPlaceholder: 'Кайдзен, Дэкси, mac-studio, Бахаса…',
+    dictSave: 'Сохранить словарь',
+    dictSaved: '✓ Словарь сохранён',
+    dictFile: 'Файл словаря',
+    dictShow: 'Показать в Finder',
     recordingsFolder: '📂 Папка записей',
     footer: 'whisper.cpp · Metal · модель Whisper large-v3-turbo от OpenAI',
     micName: 'Запись с микрофона',
@@ -172,6 +188,15 @@ export const STRINGS: Record<UiLang, Strings> = {
     showFinder: 'Tampilkan di Finder',
     txtSaved: '✓ TXT disimpan ke folder Unduhan',
     recordingSaved: '🎙️ Rekaman disimpan di «Documents/Транскрибер»',
+    dict: '📖 Kamus nama',
+    dictHint:
+      'Nama orang, nama proyek, dan istilah — satu per baris atau dipisah koma. ' +
+      'Whisper memakainya sebagai petunjuk dan berhenti salah menulisnya. Berkas ini dipakai semua proyek.',
+    dictPlaceholder: 'Кайдзен, Дэкси, mac-studio, Bahasa…',
+    dictSave: 'Simpan kamus',
+    dictSaved: '✓ Kamus disimpan',
+    dictFile: 'Berkas kamus',
+    dictShow: 'Tampilkan di Finder',
     recordingsFolder: '📂 Folder rekaman',
     footer: 'whisper.cpp · Metal · model Whisper large-v3-turbo dari OpenAI',
     micName: 'Rekaman mikrofon',

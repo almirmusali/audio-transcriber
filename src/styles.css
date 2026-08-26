@@ -513,3 +513,52 @@ footer a {
   margin-right: 6px;
   white-space: nowrap;
 }
+
+/* Личный словарь имён для whisper */
+.dict {
+  margin-bottom: 18px;
+}
+.dict-toggle {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.dict-toggle.open {
+  border-color: var(--accent);
+}
+.dict-box {
+  margin-top: 12px;
+  padding: 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.dict-text {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 14px;
+  width: 100%;
+  resize: vertical;
+  line-height: 1.55;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+}
+.dict-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.dict-path {
+  word-break: break-all;
+}

@@ -18,6 +18,28 @@ const {
   collectMedia,
   buildCourseMarkdown,
 } = require('./course.cjs')
+const {
+  GLOBAL_FILE: DICT_FILE,
+  buildPrompt,
+  promptArgs,
+  readGlobalDictionary,
+  writeGlobalDictionary,
+} = require('./whisper-dict.cjs')
+
+// Словарь длиннее лимита whisper — не молчим: тихо обрезанный словарь выглядит
+// как «словарь не работает», и искать это потом дорого.
+let dictWarned = false
+function warnDictionaryOverflow(projectDir) {
+  if (dictWarned) return
+  dictWarned = true
+  const { used, dropped } = buildPrompt(projectDir)
+  if (!dropped.length) return
+  console.warn(
+    `whisper-словарь: влезло ${used.length} терминов, не влезло ${dropped.length} ` +
+      `(начиная с «${dropped[0]}»). Убери лишнее из ~/.config/whisper/dictionary.txt — ` +
+      'хвост списка whisper всё равно не увидит.'
+  )
+}
 
 const isDev = !app.isPackaged
 const DEV_URL = 'http://localhost:5180'
@@ -281,6 +303,10 @@ function runWhisper(wav, language, tmp, onSegment, onProgress, fast) {
       '-m', MODEL, '-f', wav, '-l', language,
       '-otxt', '-osrt', '-of', outPrefix, '-pp',
     ]
+    // Личный словарь имён и терминов — whisper перестаёт коверкать
+    // «Кайдзен», «Дэкси», «mac-studio» и прочее своё.
+    warnDictionaryOverflow(path.join(__dirname, '..'))
+    args.push(...promptArgs(path.join(__dirname, '..')))
     if (fast) args.push('-bs', '1', '-bo', '1', '-nf')
     const cp = track(spawn(WHISPER, args))
     let acc = ''
@@ -395,6 +421,19 @@ ipcMain.handle('transcribe', async (e, payload) => {
   }
 })
 
+// Личный словарь для whisper: общий файл на все проекты.
+ipcMain.handle('dict-get', async () => ({
+  text: readGlobalDictionary(),
+  file: DICT_FILE,
+}))
+
+ipcMain.handle('dict-set', async (_e, text) => writeGlobalDictionary(text))
+
+ipcMain.handle('dict-reveal', async () => {
+  if (!fs.existsSync(DICT_FILE)) writeGlobalDictionary(readGlobalDictionary())
+  shell.showItemInFolder(DICT_FILE)
+})
+
 ipcMain.handle('save-as', async (_e, defaultName, content) => {
   const r = await dialog.showSaveDialog(win, { defaultPath: defaultName })
   if (r.canceled || !r.filePath) return null
@@ -502,7 +541,7 @@ ipcMain.handle('ai-process', async (_e, payload) => {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: model || 'claude-opus-4-8',
+        model: model || 'claude-opus-5',
         max_tokens: 8000,
         messages: [
           {

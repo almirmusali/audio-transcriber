@@ -42,7 +42,7 @@ const LANGUAGES: { code: string; name: string; label: string }[] = [
 
 // Модели Claude для AI-обработки (по возрастанию цены сверху вниз наоборот).
 const AI_MODELS = [
-  { id: 'claude-opus-4-8', label: 'Opus 4.8 · лучшая' },
+  { id: 'claude-opus-5', label: 'Opus 5 · лучшая' },
   { id: 'claude-sonnet-5', label: 'Sonnet 5 · дешевле' },
   { id: 'claude-haiku-4-5', label: 'Haiku 4.5 · самая дешёвая' },
 ]
@@ -110,7 +110,7 @@ export default function App() {
     () => localStorage.getItem('anthropicKey') || '',
   )
   const [aiModel, setAiModel] = useState(
-    () => localStorage.getItem('anthropicModel') || 'claude-opus-4-8',
+    () => localStorage.getItem('anthropicModel') || 'claude-opus-5',
   )
   const [aiPrompt, setAiPrompt] = useState('')
   const [aiBusy, setAiBusy] = useState(false)
@@ -130,6 +130,38 @@ export default function App() {
       /* ignore */
     }
   }, [aiModel])
+
+  // Личный словарь имён и терминов для whisper — общий файл на все проекты.
+  const [dictOpen, setDictOpen] = useState(false)
+  const [dictText, setDictText] = useState('')
+  const [dictFile, setDictFile] = useState('')
+  const [dictSaved, setDictSaved] = useState(false)
+  const dictLoaded = useRef(false)
+
+  const toggleDict = async () => {
+    const next = !dictOpen
+    setDictOpen(next)
+    if (!next || dictLoaded.current || !desktop) return
+    dictLoaded.current = true
+    try {
+      const d = await desktop.dictGet()
+      setDictText(d.text)
+      setDictFile(d.file)
+    } catch {
+      /* словаря ещё нет — покажем пустое поле */
+    }
+  }
+
+  const saveDict = async () => {
+    if (!desktop) return
+    try {
+      await desktop.dictSet(dictText)
+      setDictSaved(true)
+      window.setTimeout(() => setDictSaved(false), 2500)
+    } catch {
+      /* ignore */
+    }
+  }
 
   const progress = useModelProgress()
   const workerRef = useRef<Worker | null>(null)
@@ -694,6 +726,44 @@ export default function App() {
                 : '🐢 WebGPU нет — режим CPU'}
         </div>
       </section>
+
+      {isDesktop && (
+        <section className="dict">
+          <button
+            className={`dict-toggle ${dictOpen ? 'open' : ''}`}
+            onClick={toggleDict}
+          >
+            {t.dict}
+          </button>
+          {dictOpen && (
+            <div className="dict-box">
+              <p className="muted small">{t.dictHint}</p>
+              <textarea
+                className="dict-text"
+                value={dictText}
+                placeholder={t.dictPlaceholder}
+                onChange={(e) => setDictText(e.target.value)}
+                spellCheck={false}
+                rows={10}
+              />
+              <div className="dict-actions">
+                <button className="btn primary" onClick={saveDict}>
+                  {t.dictSave}
+                </button>
+                <button className="btn" onClick={() => desktop?.dictReveal()}>
+                  {t.dictShow}
+                </button>
+                {dictSaved && <span className="muted small">{t.dictSaved}</span>}
+              </div>
+              {dictFile && (
+                <p className="muted small dict-path">
+                  {t.dictFile}: {dictFile}
+                </p>
+              )}
+            </div>
+          )}
+        </section>
+      )}
 
       <section
         className="dropzone"
