@@ -62,6 +62,12 @@ export interface DesktopApi {
   dictGet: () => Promise<{ text: string; file: string }>
   dictSet: (text: string) => Promise<string>
   dictReveal: () => Promise<void>
+  suggestName: (payload: {
+    text: string
+    apiKey?: string
+  }) => Promise<string | null>
+  sendIdea: (text: string) => Promise<{ url: string }>
+  openExternal: (url: string) => Promise<void>
   saveAs: (defaultName: string, content: string) => Promise<string | null>
   reveal: (filePath: string) => Promise<void>
   openRecordings: () => Promise<void>

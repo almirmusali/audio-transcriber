@@ -18,6 +18,8 @@ const {
   collectMedia,
   buildCourseMarkdown,
 } = require('./course.cjs')
+const { suggestName } = require('./ai-name.cjs')
+const { sendToBank } = require('./ideabank.cjs')
 const {
   GLOBAL_FILE: DICT_FILE,
   buildPrompt,
@@ -432,6 +434,15 @@ ipcMain.handle('dict-set', async (_e, text) => writeGlobalDictionary(text))
 ipcMain.handle('dict-reveal', async () => {
   if (!fs.existsSync(DICT_FILE)) writeGlobalDictionary(readGlobalDictionary())
   shell.showItemInFolder(DICT_FILE)
+})
+
+// ===== Имя файла по смыслу и «Банк идей» =====
+ipcMain.handle('suggest-name', async (_e, payload) => suggestName(payload || {}))
+
+ipcMain.handle('send-idea', async (_e, text) => sendToBank(text))
+
+ipcMain.handle('open-external', async (_e, url) => {
+  if (/^https?:\/\//.test(String(url || ''))) await shell.openExternal(url)
 })
 
 ipcMain.handle('save-as', async (_e, defaultName, content) => {

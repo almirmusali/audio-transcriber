@@ -33,6 +33,11 @@ interface Strings {
   openMd: string
   showFinder: string
   txtSaved: string
+  naming: string
+  idea: string
+  ideaSending: string
+  ideaSent: string
+  ideaOpen: string
   recordingSaved: string
   recordingsFolder: string
   dict: string
@@ -98,6 +103,11 @@ export const STRINGS: Record<UiLang, Strings> = {
     openMd: 'Открыть .md',
     showFinder: 'Показать в Finder',
     txtSaved: '✓ TXT сохранён в Загрузки',
+    naming: '⏳ Придумываю имя…',
+    idea: '💡 Идея',
+    ideaSending: '⏳ Отправляю…',
+    ideaSent: '✓ Отправлено в «Банк идей» — разбираю на идеи',
+    ideaOpen: 'Открыть банк идей',
     recordingSaved: '🎙️ Запись сохранена в «Документы/Транскрибер»',
     dict: '📖 Словарь имён',
     dictHint:
@@ -187,6 +197,11 @@ export const STRINGS: Record<UiLang, Strings> = {
     openMd: 'Buka .md',
     showFinder: 'Tampilkan di Finder',
     txtSaved: '✓ TXT disimpan ke folder Unduhan',
+    naming: '⏳ Menyusun nama…',
+    idea: '💡 Ide',
+    ideaSending: '⏳ Mengirim…',
+    ideaSent: '✓ Dikirim ke «Bank Ide» — sedang diuraikan',
+    ideaOpen: 'Buka bank ide',
     recordingSaved: '🎙️ Rekaman disimpan di «Documents/Транскрибер»',
     dict: '📖 Kamus nama',
     dictHint:

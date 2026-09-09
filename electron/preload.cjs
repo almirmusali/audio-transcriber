@@ -41,6 +41,11 @@ contextBridge.exposeInMainWorld('desktop', {
   dictGet: () => ipcRenderer.invoke('dict-get'),
   dictSet: (text) => ipcRenderer.invoke('dict-set', text),
   dictReveal: () => ipcRenderer.invoke('dict-reveal'),
+  // Имя файла по смыслу первых строк расшифровки (Sonnet).
+  suggestName: (payload) => ipcRenderer.invoke('suggest-name', payload),
+  // Отправка расшифровки в «Банк идей» (:8771).
+  sendIdea: (text) => ipcRenderer.invoke('send-idea', text),
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
   saveAs: (defaultName, content) =>
     ipcRenderer.invoke('save-as', defaultName, content),
   reveal: (filePath) => ipcRenderer.invoke('reveal', filePath),

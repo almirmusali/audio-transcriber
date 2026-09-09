@@ -105,6 +105,14 @@ export default function App() {
     chars?: number
   } | null>(null)
 
+  // Имя файла по смыслу и отправка в «Банк идей».
+  const [naming, setNaming] = useState(false)
+  const [idea, setIdea] = useState<{
+    state: 'sending' | 'sent' | 'error'
+    url?: string
+    error?: string
+  } | null>(null)
+
   // AI-обработка (Claude API).
   const [aiKey, setAiKey] = useState(
     () => localStorage.getItem('anthropicKey') || '',
@@ -197,6 +205,7 @@ export default function App() {
     setCourse(null)
     setAiResult('')
     setAiError('')
+    setIdea(null)
     setStatus(isDesktop ? t.preparing : t.decoding)
     setFileName(name)
     progress.reset()
@@ -592,6 +601,36 @@ export default function App() {
     else download(name, content)
   }
 
+  // TXT сохраняем под именем по смыслу: модель читает начало расшифровки
+  // и предлагает название. Не вышло — остаётся transcript.txt.
+  async function saveTranscript(content: string) {
+    if (!isDesktop) {
+      download('transcript.txt', content)
+      return
+    }
+    setNaming(true)
+    try {
+      const name = await desktop!.suggestName({ text: content, apiKey: aiKey })
+      await desktop!.saveAs(`${name || 'transcript'}.txt`, content)
+    } catch {
+      await desktop!.saveAs('transcript.txt', content)
+    } finally {
+      setNaming(false)
+    }
+  }
+
+  // Расшифровка целиком уходит в «Банк идей» — он сам разберёт её на идеи.
+  async function sendToIdeaBank(content: string) {
+    if (!isDesktop || idea?.state === 'sending') return
+    setIdea({ state: 'sending' })
+    try {
+      const { url } = await desktop!.sendIdea(content)
+      setIdea({ state: 'sent', url })
+    } catch (err: any) {
+      setIdea({ state: 'error', error: err?.message || String(err) })
+    }
+  }
+
   // ===== AI-обработка транскрипта через Claude API =====
   async function runAi(prompt: string) {
     const text = final?.text ?? ''
@@ -890,9 +929,10 @@ export default function App() {
                   </button>
                   <button
                     className="btn"
-                    onClick={() => saveText('transcript.txt', partial.trim())}
+                    disabled={naming}
+                    onClick={() => saveTranscript(partial.trim())}
                   >
-                    ⬇ TXT
+                    {naming ? t.naming : '⬇ TXT'}
                   </button>
                 </div>
               </div>
@@ -918,10 +958,20 @@ export default function App() {
               </button>
               <button
                 className="btn"
-                onClick={() => saveText('transcript.txt', plainText)}
+                disabled={naming}
+                onClick={() => saveTranscript(plainText)}
               >
-                ⬇ TXT
+                {naming ? t.naming : '⬇ TXT'}
               </button>
+              {isDesktop && (
+                <button
+                  className="btn"
+                  disabled={idea?.state === 'sending'}
+                  onClick={() => sendToIdeaBank(plainText)}
+                >
+                  {idea?.state === 'sending' ? t.ideaSending : t.idea}
+                </button>
+              )}
               {final.srt && (
                 <button
                   className="btn"
@@ -950,6 +1000,24 @@ export default function App() {
                 {t.showFinder}
               </button>
             </div>
+          )}
+
+          {idea?.state === 'sent' && (
+            <div className="saved-note">
+              {t.ideaSent}
+              {idea.url && (
+                <button
+                  className="link-btn"
+                  onClick={() => desktop!.openExternal(idea.url!)}
+                >
+                  {t.ideaOpen}
+                </button>
+              )}
+            </div>
+          )}
+
+          {idea?.state === 'error' && (
+            <div className="error">⚠️ {idea.error}</div>
           )}
 
           {final.savedPath && (
