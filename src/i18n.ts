@@ -34,6 +34,7 @@ interface Strings {
   showFinder: string
   txtSaved: string
   naming: string
+  nameReason: (reason: string) => string
   idea: string
   ideaSending: string
   ideaSent: string
@@ -104,6 +105,12 @@ export const STRINGS: Record<UiLang, Strings> = {
     showFinder: 'Показать в Finder',
     txtSaved: '✓ TXT сохранён в Загрузки',
     naming: '⏳ Придумываю имя…',
+    nameReason: (reason) =>
+      reason === 'noLogin'
+        ? 'Имя по смыслу не подобралось: claude CLI не залогинен. Выполни в терминале claude login — или вставь ключ Anthropic в панели ИИ ниже.'
+        : reason === 'noCli'
+          ? 'Имя по смыслу не подобралось: claude CLI не найден. Вставь ключ Anthropic в панели ИИ ниже.'
+          : 'Имя по смыслу не подобралось — модель не ответила. Файл сохранён как transcript.txt.',
     idea: '💡 Идея',
     ideaSending: '⏳ Отправляю…',
     ideaSent: '✓ Отправлено в «Банк идей» — разбираю на идеи',
@@ -198,6 +205,12 @@ export const STRINGS: Record<UiLang, Strings> = {
     showFinder: 'Tampilkan di Finder',
     txtSaved: '✓ TXT disimpan ke folder Unduhan',
     naming: '⏳ Menyusun nama…',
+    nameReason: (reason) =>
+      reason === 'noLogin'
+        ? 'Nama otomatis gagal: claude CLI belum login. Jalankan claude login — atau masukkan kunci Anthropic di panel AI di bawah.'
+        : reason === 'noCli'
+          ? 'Nama otomatis gagal: claude CLI tidak ditemukan. Masukkan kunci Anthropic di panel AI di bawah.'
+          : 'Nama otomatis gagal — model tidak menjawab. Berkas disimpan sebagai transcript.txt.',
     idea: '💡 Ide',
     ideaSending: '⏳ Mengirim…',
     ideaSent: '✓ Dikirim ke «Bank Ide» — sedang diuraikan',

@@ -62,10 +62,10 @@ export interface DesktopApi {
   dictGet: () => Promise<{ text: string; file: string }>
   dictSet: (text: string) => Promise<string>
   dictReveal: () => Promise<void>
-  suggestName: (payload: {
-    text: string
-    apiKey?: string
-  }) => Promise<string | null>
+  suggestName: (payload: { text: string; apiKey?: string }) => Promise<{
+    name: string | null
+    reason: 'noCli' | 'noLogin' | 'failed' | null
+  }>
   sendIdea: (text: string) => Promise<{ url: string }>
   openExternal: (url: string) => Promise<void>
   saveAs: (defaultName: string, content: string) => Promise<string | null>

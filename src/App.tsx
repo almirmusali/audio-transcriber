@@ -107,6 +107,7 @@ export default function App() {
 
   // Имя файла по смыслу и отправка в «Банк идей».
   const [naming, setNaming] = useState(false)
+  const [nameReason, setNameReason] = useState<string | null>(null)
   const [idea, setIdea] = useState<{
     state: 'sending' | 'sent' | 'error'
     url?: string
@@ -206,6 +207,7 @@ export default function App() {
     setAiResult('')
     setAiError('')
     setIdea(null)
+    setNameReason(null)
     setStatus(isDesktop ? t.preparing : t.decoding)
     setFileName(name)
     progress.reset()
@@ -609,10 +611,16 @@ export default function App() {
       return
     }
     setNaming(true)
+    setNameReason(null)
     try {
-      const name = await desktop!.suggestName({ text: content, apiKey: aiKey })
+      const { name, reason } = await desktop!.suggestName({
+        text: content,
+        apiKey: aiKey,
+      })
+      setNameReason(name ? null : reason)
       await desktop!.saveAs(`${name || 'transcript'}.txt`, content)
     } catch {
+      setNameReason('failed')
       await desktop!.saveAs('transcript.txt', content)
     } finally {
       setNaming(false)
@@ -1000,6 +1008,10 @@ export default function App() {
                 {t.showFinder}
               </button>
             </div>
+          )}
+
+          {nameReason && (
+            <div className="saved-note">{t.nameReason(nameReason)}</div>
           )}
 
           {idea?.state === 'sent' && (

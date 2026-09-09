@@ -96,21 +96,33 @@ async function askApi(prompt, apiKey) {
     .join(' ')
 }
 
-// Имя файла без расширения либо null — тогда рендерер берёт своё.
+// Почему имя не подобралось — рендерер показывает это подсказкой. Молчаливый
+// откат на transcript.txt выглядит как «фича не работает», и причину не найти.
+function reasonFor(err) {
+  const m = String(err && err.message).toLowerCase()
+  if (m.includes('не найден')) return 'noCli'
+  if (m.includes('not logged in') || m.includes('login') || m.includes('oauth')) return 'noLogin'
+  return 'failed'
+}
+
+// { name, reason }: name — имя без расширения, либо null и причина отказа.
 async function suggestName({ text, apiKey } = {}) {
   const prompt = buildPrompt(text)
-  if (!prompt) return null
+  if (!prompt) return { name: null, reason: null }
+
+  let reason = null
   try {
-    return sanitizeFileName(await runClaude(prompt, 'sonnet', 60000))
+    return { name: sanitizeFileName(await runClaude(prompt, 'sonnet', 60000)), reason: null }
   } catch (err) {
+    reason = reasonFor(err)
     console.warn('claude CLI не подобрал имя:', err.message)
   }
-  if (!apiKey) return null
+  if (!apiKey) return { name: null, reason }
   try {
-    return sanitizeFileName(await askApi(prompt, apiKey))
+    return { name: sanitizeFileName(await askApi(prompt, apiKey)), reason: null }
   } catch (err) {
     console.warn('API не подобрал имя:', err.message)
-    return null
+    return { name: null, reason: 'failed' }
   }
 }
 
