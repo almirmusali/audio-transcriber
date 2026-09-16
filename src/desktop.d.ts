@@ -11,6 +11,7 @@ export interface TranscribeResult {
   srt: string
   savedPath: string | null
   recordingPath?: string | null
+  audioPath?: string | null
   seconds?: number
   chars?: number
 }
@@ -66,7 +67,7 @@ export interface DesktopApi {
     name: string | null
     reason: 'noCli' | 'noLogin' | 'failed' | null
   }>
-  sendIdea: (text: string) => Promise<{ url: string }>
+  sendIdea: (text: string, audioPath?: string | null) => Promise<{ url: string }>
   openExternal: (url: string) => Promise<void>
   saveAs: (defaultName: string, content: string) => Promise<string | null>
   reveal: (filePath: string) => Promise<void>

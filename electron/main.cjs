@@ -411,6 +411,9 @@ ipcMain.handle('transcribe', async (e, payload) => {
       srt,
       savedPath,
       recordingPath,
+      // Аудио, которое разбирали: запись с микрофона или выбранный файл.
+      // По нему «Банк идей» делает плеер у идеи.
+      audioPath: recordingPath || payload.path || null,
       seconds,
       chars: text.length,
     }
@@ -439,7 +442,11 @@ ipcMain.handle('dict-reveal', async () => {
 // ===== Имя файла по смыслу и «Банк идей» =====
 ipcMain.handle('suggest-name', async (_e, payload) => suggestName(payload || {}))
 
-ipcMain.handle('send-idea', async (_e, text) => sendToBank(text))
+ipcMain.handle('send-idea', async (_e, payload) =>
+  typeof payload === 'string'
+    ? sendToBank(payload)
+    : sendToBank(payload?.text, payload?.audioPath),
+)
 
 ipcMain.handle('open-external', async (_e, url) => {
   if (/^https?:\/\//.test(String(url || ''))) await shell.openExternal(url)

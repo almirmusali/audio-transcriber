@@ -19,6 +19,7 @@ interface FinalResult {
   segments: Chunk[]
   savedPath: string | null
   recordingPath?: string | null
+  audioPath?: string | null
   mdPath?: string | null
   fileCount?: number
   failed?: number
@@ -252,6 +253,7 @@ export default function App() {
         segments: parseSrt(res.srt),
         savedPath: res.savedPath,
         recordingPath: res.recordingPath ?? null,
+        audioPath: res.audioPath ?? res.recordingPath ?? payload.path ?? null,
         seconds: res.seconds,
         chars: res.chars ?? res.text.length,
       })
@@ -632,7 +634,8 @@ export default function App() {
     if (!isDesktop || idea?.state === 'sending') return
     setIdea({ state: 'sending' })
     try {
-      const { url } = await desktop!.sendIdea(content)
+      // Вместе с текстом уходит аудио — в банке у идеи будет плеер
+      const { url } = await desktop!.sendIdea(content, final?.audioPath ?? null)
       setIdea({ state: 'sent', url })
     } catch (err: any) {
       setIdea({ state: 'error', error: err?.message || String(err) })

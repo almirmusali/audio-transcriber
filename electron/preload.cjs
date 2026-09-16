@@ -44,7 +44,8 @@ contextBridge.exposeInMainWorld('desktop', {
   // Имя файла по смыслу первых строк расшифровки (Sonnet).
   suggestName: (payload) => ipcRenderer.invoke('suggest-name', payload),
   // Отправка расшифровки в «Банк идей» (:8771).
-  sendIdea: (text) => ipcRenderer.invoke('send-idea', text),
+  sendIdea: (text, audioPath) =>
+    ipcRenderer.invoke('send-idea', { text, audioPath: audioPath || null }),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   saveAs: (defaultName, content) =>
     ipcRenderer.invoke('save-as', defaultName, content),
