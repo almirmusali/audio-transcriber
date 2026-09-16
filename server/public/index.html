@@ -253,7 +253,7 @@ let current = null, es = null
 
 async function upload(blob, name, fromMic) {
   showJob({ name, status: 'uploading' })
-  $('jobStatus').textContent = 'Отправка на mac-studio…'
+  $('jobStatus').textContent = 'Отправка на Mac…'
   const q = new URLSearchParams({
     name, lang: $('lang').value, fast: $('fast').checked ? '1' : '0', mic: fromMic ? '1' : '0',
   })

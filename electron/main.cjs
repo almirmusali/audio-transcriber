@@ -19,7 +19,7 @@ const {
   buildCourseMarkdown,
 } = require('./course.cjs')
 const { suggestName } = require('./ai-name.cjs')
-const { sendToBank } = require('./ideabank.cjs')
+const { bankUrls, sendToBank } = require('./ideabank.cjs')
 const {
   GLOBAL_FILE: DICT_FILE,
   buildPrompt,
@@ -306,7 +306,7 @@ function runWhisper(wav, language, tmp, onSegment, onProgress, fast) {
       '-otxt', '-osrt', '-of', outPrefix, '-pp',
     ]
     // Личный словарь имён и терминов — whisper перестаёт коверкать
-    // «Кайдзен», «Дэкси», «mac-studio» и прочее своё.
+    // «Кайдзен», «Дэкси», «Notion» и прочее своё.
     warnDictionaryOverflow(path.join(__dirname, '..'))
     args.push(...promptArgs(path.join(__dirname, '..')))
     if (fast) args.push('-bs', '1', '-bo', '1', '-nf')
@@ -441,6 +441,8 @@ ipcMain.handle('dict-reveal', async () => {
 
 // ===== Имя файла по смыслу и «Банк идей» =====
 ipcMain.handle('suggest-name', async (_e, payload) => suggestName(payload || {}))
+
+ipcMain.handle('idea-enabled', async () => bankUrls().length > 0)
 
 ipcMain.handle('send-idea', async (_e, payload) =>
   typeof payload === 'string'

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Шаблон LaunchAgent для веб-версии. Заменить USER и путь к репозиторию,
+  положить в ~/Library/LaunchAgents/ и загрузить:
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/transcriber-web.plist
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>transcriber-web</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/node</string>
+    <string>/Users/USER/Code/audio-transcriber/server/server.mjs</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/USER/Code/audio-transcriber/server</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PORT</key><string>8773</string>
+    <key>HOST</key><string>127.0.0.1</string>
+    <key>PATH</key><string>/Users/USER/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/Users/USER/Library/Logs/transcriber-web.log</string>
+  <key>StandardErrorPath</key><string>/Users/USER/Library/Logs/transcriber-web.log</string>
+</dict>
+</plist>

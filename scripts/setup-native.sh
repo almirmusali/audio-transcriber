@@ -22,15 +22,22 @@ if [ ! -f resources/bin/ffmpeg ]; then
 fi
 
 echo "==> 3/3 Сборка whisper-cli (Metal)"
+# Собираем статически: иначе whisper-cli ищет libwhisper.dylib по абсолютному пути
+# папки сборки и на чужом Mac падает с «Library not loaded».
+if [ -f resources/bin/whisper-cli ] && otool -L resources/bin/whisper-cli | grep -q '@rpath'; then
+  echo "    старый whisper-cli привязан к папке сборки — пересобираю"
+  rm resources/bin/whisper-cli
+fi
 if [ ! -f resources/bin/whisper-cli ]; then
   if [ ! -d build-tools/whisper.cpp ]; then
     git clone --depth 1 https://github.com/ggml-org/whisper.cpp build-tools/whisper.cpp
   fi
-  cmake -S build-tools/whisper.cpp -B build-tools/whisper.cpp/build \
+  cmake -S build-tools/whisper.cpp -B build-tools/whisper.cpp/build-static \
     -DGGML_NATIVE=OFF -DGGML_METAL=ON -DGGML_METAL_EMBED_LIBRARY=ON \
-    -DWHISPER_BUILD_EXAMPLES=ON
-  cmake --build build-tools/whisper.cpp/build --config Release -j --target whisper-cli
-  cp build-tools/whisper.cpp/build/bin/whisper-cli resources/bin/whisper-cli
+    -DBUILD_SHARED_LIBS=OFF -DWHISPER_BUILD_EXAMPLES=ON -DWHISPER_BUILD_TESTS=OFF \
+    -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0
+  cmake --build build-tools/whisper.cpp/build-static --config Release -j --target whisper-cli
+  cp build-tools/whisper.cpp/build-static/bin/whisper-cli resources/bin/whisper-cli
   codesign --force -s - resources/bin/whisper-cli || true
 fi
 

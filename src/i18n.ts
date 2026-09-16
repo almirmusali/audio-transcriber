@@ -120,7 +120,7 @@ export const STRINGS: Record<UiLang, Strings> = {
     dictHint:
       'Имена, названия проектов и термины — по одному в строке или через запятую. ' +
       'Whisper получает их подсказкой и перестаёт их коверкать. Файл общий для всех проектов.',
-    dictPlaceholder: 'Кайдзен, Дэкси, mac-studio, Бахаса…',
+    dictPlaceholder: 'Кайдзен, Дэкси, Notion, Бахаса…',
     dictSave: 'Сохранить словарь',
     dictSaved: '✓ Словарь сохранён',
     dictFile: 'Файл словаря',
@@ -220,7 +220,7 @@ export const STRINGS: Record<UiLang, Strings> = {
     dictHint:
       'Nama orang, nama proyek, dan istilah — satu per baris atau dipisah koma. ' +
       'Whisper memakainya sebagai petunjuk dan berhenti salah menulisnya. Berkas ini dipakai semua proyek.',
-    dictPlaceholder: 'Кайдзен, Дэкси, mac-studio, Bahasa…',
+    dictPlaceholder: 'Кайдзен, Дэкси, Notion, Bahasa…',
     dictSave: 'Simpan kamus',
     dictSaved: '✓ Kamus disimpan',
     dictFile: 'Berkas kamus',

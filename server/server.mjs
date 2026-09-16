@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Веб-версия «Транскрибера» для телефона: iPhone пишет/шлёт аудио,
-// распознаёт mac-studio (whisper.cpp + Metal), текст возвращается по SSE.
+// распознаёт Mac, на котором запущен сервер (whisper.cpp + Metal), текст возвращается по SSE.
 // Зависимостей нет — только стандартная библиотека Node.
 import http from 'node:http'
 import fs from 'node:fs'

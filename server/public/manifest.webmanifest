@@ -1,7 +1,7 @@
 {
   "name": "Транскрибер",
   "short_name": "Транскрибер",
-  "description": "Аудио и видео в текст — локально на mac-studio",
+  "description": "Аудио и видео в текст — локально на своём Mac",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

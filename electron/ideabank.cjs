@@ -2,18 +2,30 @@
 // Отправка расшифровки в «Банк идей» (~/Code/idea-bank).
 //
 // Банк сам решает, что это — идея, сценарий или инструкция, — и раскладывает по
-// разделам. Отвечает сразу, разбор идёт у него фоном. Слушает 8771 на студии;
-// с ноутбука достаём его через Tailscale.
+// разделам. Отвечает сразу, разбор идёт у него фоном.
+//
+// Функция личная и по умолчанию выключена: кнопка «Идея» появляется, только если
+// адрес банка задан в IDEABANK_URL или одной строкой в ~/.config/transcriber/ideabank-url.
+// Через файл — потому что приложение из Finder переменных окружения не видит.
 //
 // Вместе с текстом отправляем и само аудио: тогда в банке у идеи будет плеер и
 // длительность, как у голосового из телеграма.
 const fs = require('fs')
 const path = require('path')
-const URLS = [
-  process.env.IDEABANK_URL,
-  'http://127.0.0.1:8771',
-  'http://mac-studio.tail667b0c.ts.net:8771',
-].filter(Boolean)
+const os = require('os')
+
+const CONFIG_FILE = path.join(os.homedir(), '.config', 'transcriber', 'ideabank-url')
+
+// Адреса по порядку: из переменной, затем строки файла. Пусто — функция выключена.
+function bankUrls() {
+  let fromFile = []
+  try {
+    fromFile = fs.readFileSync(CONFIG_FILE, 'utf8').split(/\r?\n/)
+  } catch {}
+  return [process.env.IDEABANK_URL, ...fromFile]
+    .map((u) => String(u || '').trim().replace(/\/+$/, ''))
+    .filter((u) => /^https?:\/\//.test(u))
+}
 
 // Аудио бывает на час — многовато для одного запроса, но банк локальный.
 const MAX_AUDIO_BYTES = 200 * 1024 * 1024
@@ -43,8 +55,11 @@ async function sendToBank(text, audioPath) {
         body: JSON.stringify({ text: clean, source: 'транскрибер' }),
       }
 
+  const urls = bankUrls()
+  if (!urls.length) throw new Error('Банк идей не настроен: адрес в ' + CONFIG_FILE)
+
   let lastErr = null
-  for (const base of URLS) {
+  for (const base of urls) {
     try {
       const res = await fetch(base + '/api/inbox', {
         method: 'POST',
@@ -62,8 +77,8 @@ async function sendToBank(text, audioPath) {
     }
   }
   throw new Error(
-    'Банк идей недоступен (' + (lastErr?.message || 'нет ответа') + '). Запусти его на :8771.',
+    'Банк идей недоступен (' + (lastErr?.message || 'нет ответа') + ').',
   )
 }
 
-module.exports = { URLS, sendToBank }
+module.exports = { bankUrls, sendToBank }

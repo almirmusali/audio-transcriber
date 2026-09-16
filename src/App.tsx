@@ -109,6 +109,10 @@ export default function App() {
   // Имя файла по смыслу и отправка в «Банк идей».
   const [naming, setNaming] = useState(false)
   const [nameReason, setNameReason] = useState<string | null>(null)
+  const [ideaOn, setIdeaOn] = useState(false)
+  useEffect(() => {
+    desktop?.ideaEnabled?.().then(setIdeaOn).catch(() => setIdeaOn(false))
+  }, [])
   const [idea, setIdea] = useState<{
     state: 'sending' | 'sent' | 'error'
     url?: string
@@ -974,7 +978,7 @@ export default function App() {
               >
                 {naming ? t.naming : '⬇ TXT'}
               </button>
-              {isDesktop && (
+              {isDesktop && ideaOn && (
                 <button
                   className="btn"
                   disabled={idea?.state === 'sending'}

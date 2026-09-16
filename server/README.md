@@ -1,10 +1,10 @@
 # Транскрибер на телефоне
 
 Веб-версия «Транскрибера»: айфон только пишет звук и показывает текст,
-всё распознавание идёт на **mac-studio** (whisper.cpp `large-v3-turbo` + Metal).
-Доступ только внутри тайлнета — наружу ничего не торчит.
+всё распознавание идёт на твоём Mac (whisper.cpp `large-v3-turbo` + Metal).
+Доступ только внутри своей сети Tailscale — в интернет ничего не торчит.
 
-**Адрес:** https://mac-studio.tail667b0c.ts.net:8443
+**Адрес:** `https://<имя-мака>.<твой-тайлнет>.ts.net:8443`
 
 ## Как пользоваться с айфона
 
@@ -31,13 +31,13 @@ tailscale serve --bg --https=8443 http://127.0.0.1:8773
 ```
 
 Сертификат — валидный для MagicDNS-имени, поэтому работает именно
-`mac-studio.tail667b0c.ts.net:8443`, а не короткое имя и не IP.
+полное имя `<имя-мака>.<тайлнет>.ts.net:8443`, а не короткое имя и не IP.
 
 ## Сервис
 
 - Node без зависимостей, слушает **127.0.0.1:8773** (наружу — только через Tailscale).
-- LaunchAgent `com.almir.transcriber-web`, лог `~/Library/Logs/transcriber-web.log`.
-- Перезапуск: `launchctl kickstart -k gui/$(id -u)/com.almir.transcriber-web`
+- Автозапуск: шаблон LaunchAgent `transcriber-web.plist.example`, лог `~/Library/Logs/transcriber-web.log`.
+- Перезапуск: `launchctl kickstart -k gui/$(id -u)/transcriber-web`
 - Вручную: `npm run web` (переменные `PORT`, `HOST`, `TRANSCRIBER_DATA`).
 - Бинарники и модель берутся из `resources/`, а если их нет — из
   `/Applications/Транскрибер.app/Contents/Resources`.
