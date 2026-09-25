@@ -8,6 +8,7 @@ import {
   parseSrt,
   download,
 } from './format'
+import type { Replica } from './desktop'
 import { STRINGS, UI_LANGS, type UiLang } from './i18n'
 
 type Phase = 'idle' | 'working' | 'done' | 'error'
@@ -20,6 +21,8 @@ interface FinalResult {
   savedPath: string | null
   recordingPath?: string | null
   audioPath?: string | null
+  replicas?: Replica[]
+  speakersError?: string
   mdPath?: string | null
   fileCount?: number
   failed?: number
@@ -96,6 +99,8 @@ export default function App() {
   const [recSeconds, setRecSeconds] = useState(0)
   const [elapsed, setElapsed] = useState(0)
   const [fast, setFast] = useState(false)
+  // Кто говорит: включается, когда в записи больше одного голоса.
+  const [speakers, setSpeakers] = useState(false)
   const [partial, setPartial] = useState('')
   const [pct, setPct] = useState<number | null>(null)
   const [course, setCourse] = useState<{
@@ -250,11 +255,15 @@ export default function App() {
         name: payload.name,
         language: lang.code,
         fast,
+        speakers,
+        speakerWord: t.speaker,
       })
       setFinal({
         text: res.text,
         srt: res.srt,
         segments: parseSrt(res.srt),
+        replicas: res.replicas,
+        speakersError: res.speakersError,
         savedPath: res.savedPath,
         recordingPath: res.recordingPath ?? null,
         audioPath: res.audioPath ?? res.recordingPath ?? payload.path ?? null,
@@ -284,6 +293,8 @@ export default function App() {
         dir,
         language: lang.code,
         fast,
+        speakers,
+        speakerWord: t.speaker,
       })
       setFinal({
         text: res.md,
@@ -706,7 +717,9 @@ export default function App() {
     ? `${t.fileN(course.index, course.total)} · ${course.name}`
     : status === 'recognizing'
       ? t.recognizing
-      : status
+      : status === 'speakers'
+        ? t.speakersWorking
+        : status
 
   return (
     <div className="app">
@@ -768,6 +781,17 @@ export default function App() {
               disabled={busy}
             />
             <span>{t.fastMode}</span>
+          </label>
+        )}
+        {isDesktop && (
+          <label className="toggle" title={t.speakersTitle}>
+            <input
+              type="checkbox"
+              checked={speakers}
+              onChange={(e) => setSpeakers(e.target.checked)}
+              disabled={busy}
+            />
+            <span>{t.speakersMode}</span>
           </label>
         )}
         <div className="badge">
@@ -1063,7 +1087,25 @@ export default function App() {
             </div>
           )}
 
-          {segments.length > 0 ? (
+          {final.speakersError && (
+            <div className="error">⚠️ {t.speakersFailed(final.speakersError)}</div>
+          )}
+
+          {final.replicas && final.replicas.length > 0 ? (
+            <div className="segments">
+              {final.replicas.map((r, i) => (
+                <div className="segment replica" key={i}>
+                  <span className="ts">{formatTime(r.start)}</span>
+                  <span className="seg-text">
+                    <b className={`speaker speaker-${((r.speaker - 1) % 6) + 1}`}>
+                      {t.speaker} {r.speaker}
+                    </b>{' '}
+                    {r.text}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : segments.length > 0 ? (
             <div className="segments">
               {segments.map((c, i) => (
                 <div className="segment" key={i}>

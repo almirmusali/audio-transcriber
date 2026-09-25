@@ -4,6 +4,16 @@ export interface TranscribePayload {
   name?: string
   language: string
   fast?: boolean
+  speakers?: boolean
+  speakerWord?: string
+}
+
+// Реплика при разметке говорящих: спикер 1, 2, 3… по порядку появления.
+export interface Replica {
+  speaker: number
+  start: number
+  end: number
+  text: string
 }
 
 export interface TranscribeResult {
@@ -14,6 +24,9 @@ export interface TranscribeResult {
   audioPath?: string | null
   seconds?: number
   chars?: number
+  replicas?: Replica[]
+  speakerCount?: number
+  speakersError?: string
 }
 
 export interface CourseProgress {
@@ -46,6 +59,8 @@ export interface DesktopApi {
     dir: string
     language: string
     fast?: boolean
+    speakers?: boolean
+    speakerWord?: string
   }) => Promise<CourseResult>
   openPath: (p: string) => Promise<void>
   cancel: () => Promise<void>

@@ -13,6 +13,11 @@ interface Strings {
   autoDetect: string
   fastMode: string
   fastTitle: string
+  speakersMode: string
+  speakersTitle: string
+  speakersWorking: string
+  speakersFailed: (err: string) => string
+  speaker: string
   badge: string
   dropHere: string
   chooseFile: string
@@ -84,6 +89,12 @@ export const STRINGS: Record<UiLang, Strings> = {
     fastMode: '🚀 Быстрый режим',
     fastTitle:
       'Жадное декодирование: быстрее ~2× почти без потерь на чистой речи (лекции, вебинары)',
+    speakersMode: '👥 Кто говорит',
+    speakersTitle:
+      'Разделить текст по говорящим: «Спикер 1: …», «Спикер 2: …». Для интервью, созвонов, подкастов',
+    speakersWorking: 'Разбираю голоса…',
+    speakersFailed: (err) => `Не удалось разделить по говорящим, текст без спикеров. ${err}`,
+    speaker: 'Спикер',
     badge: '⚡ Metal · локально',
     dropHere: 'Перетащи файл сюда или',
     chooseFile: 'Выбрать файл',
@@ -184,6 +195,12 @@ export const STRINGS: Record<UiLang, Strings> = {
     fastMode: '🚀 Mode cepat',
     fastTitle:
       'Dekode greedy: ~2× lebih cepat hampir tanpa kehilangan kualitas pada ucapan jernih (kuliah, webinar)',
+    speakersMode: '👥 Siapa bicara',
+    speakersTitle:
+      'Pisahkan teks per pembicara: «Pembicara 1: …», «Pembicara 2: …». Untuk wawancara, rapat, podcast',
+    speakersWorking: 'Memisahkan suara…',
+    speakersFailed: (err) => `Gagal memisahkan pembicara, teks tanpa pembicara. ${err}`,
+    speaker: 'Pembicara',
     badge: '⚡ Metal · lokal',
     dropHere: 'Seret berkas ke sini atau',
     chooseFile: 'Pilih berkas',

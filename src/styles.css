@@ -362,6 +362,17 @@ select {
   line-height: 1.5;
 }
 
+.speaker {
+  font-weight: 700;
+  margin-right: 2px;
+}
+.speaker-1 { color: #6d8bff; }
+.speaker-2 { color: #e0892f; }
+.speaker-3 { color: #3fae6a; }
+.speaker-4 { color: #c65bd1; }
+.speaker-5 { color: #d14d5b; }
+.speaker-6 { color: #2aa6b8; }
+
 .plain {
   line-height: 1.7;
   white-space: pre-wrap;

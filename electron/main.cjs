@@ -18,6 +18,7 @@ const {
   collectMedia,
   buildCourseMarkdown,
 } = require('./course.cjs')
+const { diarize, toReplicas, wordsFromWhisperJson, replicasText } = require('./diarize.cjs')
 const { suggestName } = require('./ai-name.cjs')
 const { bankUrls, sendToBank } = require('./ideabank.cjs')
 const {
@@ -54,6 +55,11 @@ function resourcePath(...p) {
 
 const MODEL = resourcePath('models', 'ggml-large-v3-turbo-q5_0.bin')
 const WHISPER = resourcePath('bin', 'whisper-cli')
+const DIARIZATION = {
+  bin: resourcePath('bin', 'sherpa-onnx-offline-speaker-diarization'),
+  segmentation: resourcePath('models', 'diarization', 'segmentation.onnx'),
+  embedding: resourcePath('models', 'diarization', 'embedding.onnx'),
+}
 
 // Папка для сохранения записей с микрофона.
 function recordingsDir() {
@@ -298,7 +304,8 @@ const TS = /\[\d{2}:\d{2}:\d{2}\.\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}\.\d{3}\]\s*(.*)
 
 // Прогоняет готовый wav через whisper-cli. onSegment(acc), onProgress(pct%).
 // fast: жадное декодирование (-bs 1 -bo 1 -nf) — быстрее ~2× на чистой речи.
-function runWhisper(wav, language, tmp, onSegment, onProgress, fast) {
+// words: ещё и полный JSON (-ojf) с таймкодами слов — для разметки говорящих.
+function runWhisper(wav, language, tmp, onSegment, onProgress, fast, words) {
   return new Promise((resolve, reject) => {
     const outPrefix = path.join(tmp, 'out')
     const args = [
@@ -310,6 +317,7 @@ function runWhisper(wav, language, tmp, onSegment, onProgress, fast) {
     warnDictionaryOverflow(path.join(__dirname, '..'))
     args.push(...promptArgs(path.join(__dirname, '..')))
     if (fast) args.push('-bs', '1', '-bo', '1', '-nf')
+    if (words) args.push('-ojf')
     const cp = track(spawn(WHISPER, args))
     let acc = ''
     let stderr = ''
@@ -338,19 +346,74 @@ function runWhisper(wav, language, tmp, onSegment, onProgress, fast) {
         ? fs.readFileSync(txtFile, 'utf8').trim()
         : acc
       const srt = fs.existsSync(srtFile) ? fs.readFileSync(srtFile, 'utf8') : ''
-      resolve({ text, srt })
+      let json = null
+      try {
+        if (words) json = JSON.parse(fs.readFileSync(outPrefix + '.json', 'utf8'))
+      } catch {
+        /* нет JSON — отдадим текст без спикеров */
+      }
+      resolve({ text, srt, json })
     })
   })
 }
 
+// Спикер в SRT: «[Спикер 2] текст» — по тому, кто говорил дольше всего
+// в границах субтитра.
+function labelSrt(srt, replicas, label) {
+  return srt.replace(
+    /(\d{2}):(\d{2}):(\d{2}),(\d{3}) --> (\d{2}):(\d{2}):(\d{2}),(\d{3})\n([^\n])/g,
+    (all, h1, m1, s1, ms1, h2, m2, s2, ms2, first) => {
+      const a = +h1 * 3600 + +m1 * 60 + +s1 + +ms1 / 1000
+      const b = +h2 * 3600 + +m2 * 60 + +s2 + +ms2 / 1000
+      let best = null
+      let most = 0
+      for (const r of replicas) {
+        const o = Math.min(b, r.end) - Math.max(a, r.start)
+        if (o > most) (most = o), (best = r.speaker)
+      }
+      return best ? all.slice(0, -1) + `[${label(best)}] ` + first : all
+    },
+  )
+}
+
 // Полный цикл для одного файла: конвертация в wav + распознавание.
-async function transcribeInput(input, language, onSegment, onProgress, fast) {
+// opts.speakers — ещё и разметка говорящих; opts.speakerWord — «Спикер»
+// на языке интерфейса; opts.onStatus — сообщить, что ждём разметку.
+async function transcribeInput(input, language, onSegment, onProgress, fast, opts = {}) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'transcriber-'))
   try {
     const wav = path.join(tmp, 'audio.wav')
     await toWav(input, wav)
-    const r = await runWhisper(wav, language, tmp, onSegment, onProgress, fast)
-    return { ...r, seconds: wavSeconds(wav) }
+    // Разметка на CPU идёт параллельно с whisper на Metal — почти бесплатно
+    // по времени. Ошибку ловим сразу, чтобы не было unhandled rejection.
+    const speakers = opts.speakers
+      ? diarize(wav, DIARIZATION, track).then(
+          (turns) => ({ turns }),
+          (error) => ({ error }),
+        )
+      : null
+    const r = await runWhisper(wav, language, tmp, onSegment, onProgress, fast, !!speakers)
+    const seconds = wavSeconds(wav)
+    if (!speakers || CANCELLED) return { ...r, seconds }
+
+    opts.onStatus && opts.onStatus('speakers')
+    const d = await speakers
+    if (CANCELLED) return { ...r, seconds }
+    if (d.error) {
+      console.error('Разметка говорящих:', d.error.message)
+      return { ...r, seconds, speakersError: d.error.message }
+    }
+    if (!r.json) return { ...r, seconds, speakersError: 'whisper не отдал таймкоды слов' }
+    const word = opts.speakerWord || 'Спикер'
+    const label = (n) => `${word} ${n}`
+    const replicas = toReplicas(wordsFromWhisperJson(r.json), d.turns)
+    return {
+      text: replicasText(replicas, label),
+      srt: labelSrt(r.srt, replicas, label),
+      seconds,
+      replicas,
+      speakerCount: new Set(replicas.map((x) => x.speaker)).size,
+    }
   } finally {
     try {
       fs.rmSync(tmp, { recursive: true, force: true })
@@ -384,12 +447,17 @@ ipcMain.handle('transcribe', async (e, payload) => {
 
     // 'recognizing' — токен, рендерер сам локализует.
     e.sender.send('status', 'recognizing')
-    const { text, srt, seconds } = await transcribeInput(
+    const { text, srt, seconds, replicas, speakerCount, speakersError } = await transcribeInput(
       input,
       language,
       (acc) => e.sender.send('partial', acc),
       (pct) => e.sender.send('progress', pct),
       !!payload.fast,
+      {
+        speakers: !!payload.speakers,
+        speakerWord: payload.speakerWord,
+        onStatus: (s) => e.sender.send('status', s),
+      },
     )
 
     // Авто-сохранение TXT в Загрузки (аналог авто-скачивания в браузере).
@@ -416,6 +484,9 @@ ipcMain.handle('transcribe', async (e, payload) => {
       audioPath: recordingPath || payload.path || null,
       seconds,
       chars: text.length,
+      replicas,
+      speakerCount,
+      speakersError,
     }
   } finally {
     try {
@@ -512,6 +583,7 @@ ipcMain.handle('transcribe-course', async (e, payload) => {
         (acc) => e.sender.send('partial', acc),
         (pct) => e.sender.send('progress', pct),
         fast,
+        { speakers: !!payload.speakers, speakerWord: payload.speakerWord },
       )
       results.set(abs, r)
       totalSeconds += r.seconds || 0
