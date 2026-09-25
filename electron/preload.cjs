@@ -24,6 +24,8 @@ contextBridge.exposeInMainWorld('desktop', {
   openPath: (p) => ipcRenderer.invoke('open-path', p),
   // Отмена текущей транскрипции (одиночной или курса).
   cancel: () => ipcRenderer.invoke('cancel-transcribe'),
+  // «Кто говорит» переключили во время распознавания.
+  setSpeakers: (on) => ipcRenderer.invoke('set-speakers', on),
   // Копирование в системный буфер обмена.
   copy: (text) => ipcRenderer.invoke('copy-text', text),
   // Плавающая плашка записи (always-on-top).

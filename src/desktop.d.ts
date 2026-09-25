@@ -64,6 +64,7 @@ export interface DesktopApi {
   }) => Promise<CourseResult>
   openPath: (p: string) => Promise<void>
   cancel: () => Promise<void>
+  setSpeakers: (on: boolean) => Promise<void>
   copy: (text: string) => Promise<void>
   recShow: () => void
   recHide: () => void

@@ -105,6 +105,44 @@ function findFfmpeg() {
 
 // Отмена: трекаем активные процессы (ffmpeg/whisper), чтобы уметь их убить.
 let CANCELLED = false
+
+// «Кто говорит» можно нажать и во время распознавания. SPEAKERS — текущее
+// положение переключателя (задаётся при старте и меняется по 'set-speakers'),
+// SPEAKER_JOB — файл, который сейчас распознаётся: его wav и запущенная разметка.
+let SPEAKERS = false
+let SPEAKER_JOB = null
+
+function startDiarization(job) {
+  if (job.speakers) return
+  job.speakers = diarize(job.wav, DIARIZATION, (cp) => {
+    job.cp = cp
+    return track(cp)
+  }).then(
+    (turns) => ({ turns }),
+    (error) => ({ error }),
+  )
+}
+
+ipcMain.handle('set-speakers', async (_e, on) => {
+  SPEAKERS = !!on
+  const job = SPEAKER_JOB
+  if (!job) return
+  if (SPEAKERS) startDiarization(job)
+  else stopDiarization(job)
+})
+
+// Выключили — разметка больше не нужна, освобождаем CPU. Промис обнуляем,
+// чтобы повторное включение запустило её заново.
+function stopDiarization(job) {
+  job.speakers = null
+  if (!job.cp) return
+  try {
+    job.cp.kill('SIGKILL')
+  } catch {
+    /* ignore */
+  }
+  job.cp = null
+}
 const ACTIVE = new Set()
 function track(cp) {
   ACTIVE.add(cp)
@@ -377,28 +415,49 @@ function labelSrt(srt, replicas, label) {
 }
 
 // Полный цикл для одного файла: конвертация в wav + распознавание.
-// opts.speakers — ещё и разметка говорящих; opts.speakerWord — «Спикер»
-// на языке интерфейса; opts.onStatus — сообщить, что ждём разметку.
+// Разметка говорящих — по переключателю SPEAKERS, в том числе включённому
+// посреди распознавания. opts.speakerWord — «Спикер» на языке интерфейса;
+// opts.onStatus — сообщить, что ждём разметку.
 async function transcribeInput(input, language, onSegment, onProgress, fast, opts = {}) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'transcriber-'))
   try {
     const wav = path.join(tmp, 'audio.wav')
     await toWav(input, wav)
     // Разметка на CPU идёт параллельно с whisper на Metal — почти бесплатно
-    // по времени. Ошибку ловим сразу, чтобы не было unhandled rejection.
-    const speakers = opts.speakers
-      ? diarize(wav, DIARIZATION, track).then(
-          (turns) => ({ turns }),
-          (error) => ({ error }),
-        )
-      : null
-    const r = await runWhisper(wav, language, tmp, onSegment, onProgress, fast, !!speakers)
+    // по времени. Таймкоды слов (-ojf) пишем всегда: переключатель могут
+    // нажать, когда whisper уже работает.
+    const job = { wav, speakers: null, cp: null }
+    SPEAKER_JOB = job
+    if (SPEAKERS) startDiarization(job)
+    let r
+    try {
+      r = await runWhisper(wav, language, tmp, onSegment, onProgress, fast, true)
+    } catch (err) {
+      SPEAKER_JOB = null
+      stopDiarization(job)
+      throw err
+    }
     const seconds = wavSeconds(wav)
-    if (!speakers || CANCELLED) return { ...r, seconds }
+    if (!SPEAKERS || CANCELLED) {
+      SPEAKER_JOB = null
+      stopDiarization(job)
+      return { ...r, seconds }
+    }
 
     opts.onStatus && opts.onStatus('speakers')
-    const d = await speakers
-    if (CANCELLED) return { ...r, seconds }
+    // Пока ждём, переключатель могут выключить (промис обнулится) или
+    // выключить и включить снова (появится новый) — ждём актуальный.
+    let d = null
+    for (;;) {
+      const p = job.speakers
+      if (!p) break
+      d = await p
+      if (job.speakers === p || CANCELLED) break
+      d = null
+    }
+    SPEAKER_JOB = null
+    // Выключили, пока ждали разметку, — отдаём текст без спикеров.
+    if (CANCELLED || !SPEAKERS || !d) return { ...r, seconds }
     if (d.error) {
       console.error('Разметка говорящих:', d.error.message)
       return { ...r, seconds, speakersError: d.error.message }
@@ -426,6 +485,7 @@ async function transcribeInput(input, language, onSegment, onProgress, fast, opt
 
 ipcMain.handle('transcribe', async (e, payload) => {
   CANCELLED = false
+  SPEAKERS = !!payload.speakers
   const language = payload.language && payload.language !== '' ? payload.language : 'auto'
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'transcriber-'))
   try {
@@ -454,7 +514,6 @@ ipcMain.handle('transcribe', async (e, payload) => {
       (pct) => e.sender.send('progress', pct),
       !!payload.fast,
       {
-        speakers: !!payload.speakers,
         speakerWord: payload.speakerWord,
         onStatus: (s) => e.sender.send('status', s),
       },
@@ -544,6 +603,7 @@ ipcMain.handle('open-recordings', async () => {
 // Распознаёт всю папку курса → единый .md с оглавлением.
 ipcMain.handle('transcribe-course', async (e, payload) => {
   CANCELLED = false
+  SPEAKERS = !!payload.speakers
   const dir = payload.dir
   const language =
     payload.language && payload.language !== '' ? payload.language : 'auto'
@@ -583,7 +643,7 @@ ipcMain.handle('transcribe-course', async (e, payload) => {
         (acc) => e.sender.send('partial', acc),
         (pct) => e.sender.send('progress', pct),
         fast,
-        { speakers: !!payload.speakers, speakerWord: payload.speakerWord },
+        { speakerWord: payload.speakerWord },
       )
       results.set(abs, r)
       totalSeconds += r.seconds || 0

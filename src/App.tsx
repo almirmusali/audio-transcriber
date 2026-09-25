@@ -788,8 +788,12 @@ export default function App() {
             <input
               type="checkbox"
               checked={speakers}
-              onChange={(e) => setSpeakers(e.target.checked)}
-              disabled={busy}
+              onChange={(e) => {
+                // Можно и посреди распознавания: main сразу запустит
+                // (или погасит) разметку для текущего файла.
+                setSpeakers(e.target.checked)
+                if (busy) desktop!.setSpeakers(e.target.checked)
+              }}
             />
             <span>{t.speakersMode}</span>
           </label>
