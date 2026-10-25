@@ -1,0 +1,55 @@
+name: Transcriber
+options:
+  bundleIdPrefix: com.almirmusalimov
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    # Всё приложение по умолчанию на главном потоке; звук и загрузка помечены nonisolated явно.
+    SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+    SWIFT_APPROACHABLE_CONCURRENCY: "YES"
+    CODE_SIGN_STYLE: Automatic
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # Адрес сервера и команда подписи подставляет Makefile из ~/.config/transcriber/ —
+    # в открытом репозитории их нет.
+    TRANSCRIBER_SERVER_URL: ""
+targets:
+  Transcriber:
+    type: application
+    platform: iOS
+    sources: [Transcriber]
+    info:
+      path: Transcriber/Info.plist
+      properties:
+        CFBundleDisplayName: Транскрибер
+        CFBundleDevelopmentRegion: ru
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        NSMicrophoneUsageDescription: "Микрофон пишет совещание или заметку. Запись уходит только на твой Mac для расшифровки."
+        # Запись совещания идёт при погасшем экране и в свёрнутом приложении.
+        UIBackgroundModes: [audio]
+        TranscriberServerURL: $(TRANSCRIBER_SERVER_URL)
+        # Записи видны в «Файлах» (На iPhone → Транскрибер) — их можно достать и без сервера.
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        # «Поделиться → Транскрибер» из Диктофона, Файлов, Телеграма.
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Аудио и видео
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [public.audio, public.audiovisual-content, public.movie]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.almirmusalimov.transcriber
+        PRODUCT_NAME: Transcriber
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+schemes:
+  Transcriber:
+    build:
+      targets:
+        Transcriber: all

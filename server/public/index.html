@@ -292,7 +292,7 @@ function showJob(j) {
 }
 
 const LABELS = {
-  queued: 'В очереди', converting: 'Готовлю аудио…', recognizing: 'Распознаю…',
+  queued: 'В очереди', converting: 'Готовлю аудио…', recognizing: 'Распознаю…', speakers: 'Размечаю, кто говорит…',
   done: 'Готово', error: 'Ошибка', cancelled: 'Остановлено', uploading: 'Отправка…',
 }
 
@@ -449,7 +449,7 @@ async function open_(id) {
 // Вернулись в приложение — обновим состояние (iOS замораживает SSE в фоне).
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && current && current.id &&
-      ['queued', 'converting', 'recognizing'].includes(current.status)) attach(current.id)
+      ['queued', 'converting', 'recognizing', 'speakers'].includes(current.status)) attach(current.id)
 })
 </script>
 </body>

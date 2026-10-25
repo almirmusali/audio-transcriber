@@ -203,8 +203,28 @@ function replicasText(replicas, label = (n) => `Спикер ${n}`) {
   return replicas.map((r) => `${label(r.speaker)}: ${r.text}`).join('\n\n')
 }
 
+// Спикер в SRT: «[Спикер 2] текст» — по тому, кто говорил дольше всего
+// в границах субтитра.
+function labelSrt(srt, replicas, label) {
+  return srt.replace(
+    /(\d{2}):(\d{2}):(\d{2}),(\d{3}) --> (\d{2}):(\d{2}):(\d{2}),(\d{3})\n([^\n])/g,
+    (all, h1, m1, s1, ms1, h2, m2, s2, ms2, first) => {
+      const a = +h1 * 3600 + +m1 * 60 + +s1 + +ms1 / 1000
+      const b = +h2 * 3600 + +m2 * 60 + +s2 + +ms2 / 1000
+      let best = null
+      let most = 0
+      for (const r of replicas) {
+        const o = Math.min(b, r.end) - Math.max(a, r.start)
+        if (o > most) (most = o), (best = r.speaker)
+      }
+      return best ? all.slice(0, -1) + `[${label(best)}] ` + first : all
+    },
+  )
+}
+
 module.exports = {
   diarize,
+  labelSrt,
   toReplicas,
   speakerAt,
   wordsFromWhisperJson,

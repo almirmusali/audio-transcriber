@@ -9,7 +9,14 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { createRequire } from 'node:module'
 import { buildPrompt, promptArgs } from './whisper-dict.mjs'
+
+// Разметка говорящих и «Совещание в Орбиту» — те же модули, что у приложения на Mac,
+// чтобы телефон и десктоп размечали и отправляли одинаково.
+const require = createRequire(import.meta.url)
+const { diarize, toReplicas, wordsFromWhisperJson, replicasText, labelSrt } = require('../electron/diarize.cjs')
+const { orbitaUrls, sendMeeting } = require('../electron/orbita.cjs')
 
 // Словарь длиннее лимита whisper — не молчим: тихо обрезанный словарь выглядит
 // как «словарь не работает», и искать это потом дорого.
@@ -61,6 +68,21 @@ const MODEL = pick(
   path.join(PROJECT, 'resources', 'models', 'ggml-large-v3-turbo-q5_0.bin'),
   path.join(APP_RES, 'models', 'ggml-large-v3-turbo-q5_0.bin'),
 )
+const DIARIZATION = {
+  bin: pick(
+    path.join(PROJECT, 'resources', 'bin', 'sherpa-onnx-offline-speaker-diarization'),
+    path.join(APP_RES, 'bin', 'sherpa-onnx-offline-speaker-diarization'),
+  ),
+  segmentation: pick(
+    path.join(PROJECT, 'resources', 'models', 'diarization', 'segmentation.onnx'),
+    path.join(APP_RES, 'models', 'diarization', 'segmentation.onnx'),
+  ),
+  embedding: pick(
+    path.join(PROJECT, 'resources', 'models', 'diarization', 'embedding.onnx'),
+    path.join(APP_RES, 'models', 'diarization', 'embedding.onnx'),
+  ),
+}
+const CAN_DIARIZE = Object.values(DIARIZATION).every(Boolean)
 const CLAUDE = pick(
   process.env.CLAUDE_BIN,
   path.join(os.homedir(), '.local', 'bin', 'claude'),
@@ -163,8 +185,19 @@ async function process_(j) {
   if (j.cancelled) return
   j.seconds = wavSeconds(wav)
 
+  // Разметка говорящих идёт на CPU параллельно с whisper на Metal — почти бесплатно по времени.
+  const speakers =
+    j.speakers && CAN_DIARIZE
+      ? diarize(wav, DIARIZATION, (cp) => (j.procs.add(cp), cp.on('close', () => j.procs.delete(cp)), cp)).then(
+          (turns) => ({ turns }),
+          (error) => ({ error }),
+        )
+      : null
+
   setStatus(j, 'recognizing', { progress: 0 })
-  const args = ['-m', MODEL, '-f', wav, '-l', j.lang || 'auto', '-otxt', '-osrt', '-of', outPrefix, '-pp']
+  // -ojf: таймкоды слов — по ним совещание в Орбите получает реплики со временем,
+  // а разметка говорящих раскладывает слова по спикерам.
+  const args = ['-m', MODEL, '-f', wav, '-l', j.lang || 'auto', '-otxt', '-osrt', '-ojf', '-of', outPrefix, '-pp']
   // Личный словарь имён и терминов (~/.config/whisper/dictionary.txt).
   warnDictionaryOverflow(PROJECT)
   args.push(...promptArgs(PROJECT))
@@ -203,12 +236,78 @@ async function process_(j) {
   const srtFile = outPrefix + '.srt'
   j.text = fs.existsSync(txtFile) ? fs.readFileSync(txtFile, 'utf8').trim() : acc
   j.srt = fs.existsSync(srtFile) ? fs.readFileSync(srtFile, 'utf8') : ''
+  let json = null
+  try {
+    json = JSON.parse(fs.readFileSync(outPrefix + '.json', 'utf8'))
+  } catch {
+    /* нет JSON — останемся без таймкодов реплик */
+  }
+  j.segments = segmentsFromWhisperJson(json)
+
+  if (speakers && !j.cancelled) {
+    setStatus(j, 'speakers')
+    const d = await speakers
+    if (j.cancelled) return
+    if (d.error) j.speakersError = d.error.message || String(d.error)
+    else if (!json) j.speakersError = 'whisper не отдал таймкоды слов'
+    else {
+      const label = (n) => `${j.speakerWord} ${n}`
+      const replicas = toReplicas(wordsFromWhisperJson(json), d.turns)
+      j.text = replicasText(replicas, label)
+      j.srt = labelSrt(j.srt, replicas, label)
+      j.segments = replicas.map((r) => ({ start: r.start, end: r.end, text: r.text, speaker: label(r.speaker) }))
+      j.speakerCount = new Set(replicas.map((r) => r.speaker)).size
+    }
+  }
   j.chars = j.text.length
   try {
     fs.rmSync(wav, { force: true })
   } catch {
     /* ignore */
   }
+}
+
+// Реплики whisper со временем: [{start, end, text}] в секундах.
+function segmentsFromWhisperJson(json) {
+  return (json?.transcription || [])
+    .map((seg) => ({
+      start: (seg.offsets?.from || 0) / 1000,
+      end: (seg.offsets?.to || 0) / 1000,
+      text: String(seg.text || '').trim(),
+    }))
+    .filter((s) => s.text)
+}
+
+// ---------- Орбита ----------
+const isLoopback = (u) => /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/|$)/.test(u)
+
+// Совещание (текст с таймкодами, спикеры и запись) уходит в Орбиту, саммари пишет она.
+// Шлём с этого Mac, поэтому ответить может 127.0.0.1 — но ссылку открывать телефону,
+// и её даём на адрес в tailnet.
+async function sendToOrbita(j) {
+  if (j.meeting?.state === 'sending') return
+  j.meeting = { state: 'sending' }
+  saveMeta(j)
+  try {
+    const r = await sendMeeting(
+      {
+        text: j.text,
+        segments: j.segments || [],
+        durationSec: j.seconds || 0,
+        at: j.recordedAt || j.createdAt - (j.fromMic ? (j.seconds || 0) * 1000 : 0),
+        audioPath: j.sourceFile,
+      },
+      FFMPEG,
+    )
+    let url = r.url
+    const pub = orbitaUrls().find((u) => !isLoopback(u))
+    if (pub && isLoopback(url)) url = pub + url.replace(/^https?:\/\/[^/]+/, '')
+    j.meeting = { state: 'sent', url, audioError: r.audioError || null, at: Date.now() }
+  } catch (err) {
+    j.meeting = { state: 'error', error: err?.message || String(err) }
+  }
+  saveMeta(j)
+  return j.meeting
 }
 
 async function pump() {
@@ -223,12 +322,23 @@ async function pump() {
       emit(j, 'done', publicJob(j))
     } else {
       setStatus(j, 'done', { progress: 100, finishedAt: Date.now() })
+      // «Сразу в Орбиту» — телефон можно убрать в карман сразу после записи.
+      // Не ждём: запись льётся в Орбиту, а очередь идёт дальше; итог — в поле meeting.
+      if (j.orbita && j.text) sendToOrbita(j)
       emit(j, 'done', publicJob(j))
     }
   } catch (err) {
     setStatus(j, 'error', { error: err.message || String(err), finishedAt: Date.now() })
     emit(j, 'done', publicJob(j))
   } finally {
+    // whisper упал, а разметка говорящих ещё считает — не оставляем её молотить
+    for (const cp of j.procs) {
+      try {
+        cp.kill('SIGKILL')
+      } catch {
+        /* ignore */
+      }
+    }
     RUNNING = null
     for (const res of CLIENTS.get(j.id) || []) {
       try {
@@ -260,6 +370,7 @@ function loadHistory() {
       const j = JSON.parse(fs.readFileSync(path.join(DATA, d, 'meta.json'), 'utf8'))
       // Задания, оборванные перезапуском сервера, не воскрешаем.
       if (j.status !== 'done' && j.status !== 'error') j.status = 'cancelled'
+      if (j.meeting?.state === 'sending') j.meeting = { state: 'error', error: 'Сервер перезапустился' }
       j.procs = new Set()
       JOBS.set(j.id, j)
     } catch {
@@ -357,6 +468,11 @@ function createJob(req, res, query) {
       fromMic,
       lang: query.get('lang') || 'auto',
       fast: query.get('fast') === '1',
+      speakers: query.get('speakers') === '1',
+      speakerWord: (query.get('speakerWord') || 'Спикер').slice(0, 20),
+      orbita: query.get('orbita') === '1',
+      // начало записи (мс) — телефон знает его точно, файл с телефона — нет
+      recordedAt: Number(query.get('at')) || null,
       status: 'queued',
       progress: 0,
       partial: '',
@@ -464,6 +580,8 @@ const server = http.createServer((req, res) => {
       ok: true,
       model: path.basename(MODEL),
       ai: !!CLAUDE,
+      speakers: CAN_DIARIZE,
+      orbita: orbitaUrls().length > 0,
       running: RUNNING ? RUNNING.id : null,
       queue: QUEUE.length,
     })
@@ -483,6 +601,8 @@ const server = http.createServer((req, res) => {
         chars: j.chars,
         createdAt: j.createdAt,
         preview: (j.text || j.partial || '').slice(0, 120),
+        speakerCount: j.speakerCount || 0,
+        meeting: j.meeting?.state || null,
       }))
     return sendJson(res, 200, { items })
   }
@@ -523,6 +643,15 @@ const server = http.createServer((req, res) => {
       if (!fs.existsSync(j.sourceFile)) return sendJson(res, 404, { error: 'Нет аудио' })
       res.writeHead(200, { 'content-type': 'application/octet-stream' })
       return fs.createReadStream(j.sourceFile).pipe(res)
+    }
+    if (sub === '/orbita' && req.method === 'POST') {
+      if (!orbitaUrls().length) return sendJson(res, 400, { error: 'Орбита не настроена на сервере' })
+      if (j.status !== 'done' || !j.text) return sendJson(res, 409, { error: 'Расшифровка ещё не готова' })
+      if (j.meeting?.state === 'sent') return sendJson(res, 200, j.meeting)
+      // Аудио часового совещания льётся по tailnet минутами — отвечаем сразу,
+      // за итогом клиент ходит в GET /api/jobs/:id (поле meeting).
+      sendToOrbita(j)
+      return sendJson(res, 202, j.meeting)
     }
     if (sub === '/ai' && req.method === 'POST') {
       let body = ''

@@ -22,6 +22,16 @@
 Записи, TXT и SRT остаются в `~/Documents/Транскрибер/Телефон/<id>/`,
 последние 50 показаны в «Истории».
 
+## Приложение для айфона
+
+`ios/` — нативное приложение (SwiftUI): пишет совещание при погасшем экране, отправляет
+запись на этот сервер фоновой загрузкой, показывает текст по спикерам и шлёт совещание
+в Орбиту. Сборка — `cd ios && make install`, подробности в `ios/README.md`.
+
+Разметка спикеров и Орбита — те же модули, что у приложения на Mac
+(`electron/diarize.cjs`, `electron/orbita.cjs`); Орбита включается файлом
+`~/.config/transcriber/orbita-url`.
+
 ## Почему HTTPS
 
 iOS даёт микрофон только в secure context. TLS терминирует Tailscale:
@@ -47,11 +57,12 @@ tailscale serve --bg --https=8443 http://127.0.0.1:8773
 
 | Метод | Путь | Что делает |
 |---|---|---|
-| POST | `/api/jobs?name=&lang=&fast=&mic=` | тело — сырые байты аудио, ответ `{id}` |
+| POST | `/api/jobs?name=&lang=&fast=&mic=&speakers=&orbita=&at=` | тело — сырые байты аудио, ответ `{id}`. `speakers=1` — разметить, кто говорит; `orbita=1` — по готовности отправить совещание в Орбиту; `at` — начало записи, мс |
 | GET | `/api/jobs/:id/events` | SSE: `state`, `progress`, `partial`, `done` |
 | GET | `/api/jobs/:id` | состояние задания |
 | POST | `/api/jobs/:id/cancel` | остановить |
 | GET | `/api/jobs/:id/txt` · `/srt` · `/audio` | скачать |
+| POST | `/api/jobs/:id/orbita` | отправить совещание в Орбиту (ответ сразу, итог — поле `meeting` в `GET /api/jobs/:id`) |
 | POST | `/api/jobs/:id/ai` | `{preset:"clean"\|"summary"\|"post"}` → текст |
 | GET | `/api/history` | последние задания |
 
