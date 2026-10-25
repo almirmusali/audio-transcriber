@@ -21,6 +21,7 @@ const {
 const { diarize, toReplicas, wordsFromWhisperJson, replicasText } = require('./diarize.cjs')
 const { suggestName } = require('./ai-name.cjs')
 const { bankUrls, sendToBank } = require('./ideabank.cjs')
+const { orbitaUrls, sendMeeting } = require('./orbita.cjs')
 const {
   GLOBAL_FILE: DICT_FILE,
   buildPrompt,
@@ -579,6 +580,10 @@ ipcMain.handle('send-idea', async (_e, payload) =>
     ? sendToBank(payload)
     : sendToBank(payload?.text, payload?.audioPath),
 )
+
+ipcMain.handle('orbita-enabled', async () => orbitaUrls().length > 0)
+
+ipcMain.handle('send-meeting', async (_e, payload) => sendMeeting(payload || {}, findFfmpeg()))
 
 ipcMain.handle('open-external', async (_e, url) => {
   if (/^https?:\/\//.test(String(url || ''))) await shell.openExternal(url)

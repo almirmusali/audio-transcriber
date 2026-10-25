@@ -44,6 +44,12 @@ interface Strings {
   ideaSending: string
   ideaSent: string
   ideaOpen: string
+  meeting: string
+  meetingTitle: string
+  meetingSending: string
+  meetingSent: string
+  meetingNoAudio: (err: string) => string
+  meetingOpen: string
   recordingSaved: string
   recordingsFolder: string
   dict: string
@@ -126,6 +132,12 @@ export const STRINGS: Record<UiLang, Strings> = {
     ideaSending: '⏳ Отправляю…',
     ideaSent: '✓ Отправлено в «Банк идей» — разбираю на идеи',
     ideaOpen: 'Открыть банк идей',
+    meeting: '🪐 Совещание в Орбиту',
+    meetingTitle: 'Сохранить в Орбите как совещание: запись, саммари на 1–2 страницы и полная расшифровка',
+    meetingSending: '⏳ Отправляю в Орбиту…',
+    meetingSent: '✓ Совещание в Орбите — саммари будет готово через пару минут',
+    meetingNoAudio: (err) => `Текст ушёл, а запись — нет: ${err}`,
+    meetingOpen: 'Открыть в Орбите',
     recordingSaved: '🎙️ Запись сохранена в «Документы/Транскрибер»',
     dict: '📖 Словарь имён',
     dictHint:
@@ -232,6 +244,12 @@ export const STRINGS: Record<UiLang, Strings> = {
     ideaSending: '⏳ Mengirim…',
     ideaSent: '✓ Dikirim ke «Bank Ide» — sedang diuraikan',
     ideaOpen: 'Buka bank ide',
+    meeting: '🪐 Rapat ke Orbita',
+    meetingTitle: 'Simpan di Orbita sebagai rapat: rekaman, ringkasan 1–2 halaman dan transkrip lengkap',
+    meetingSending: '⏳ Mengirim ke Orbita…',
+    meetingSent: '✓ Rapat ada di Orbita — ringkasan siap dalam beberapa menit',
+    meetingNoAudio: (err) => `Teks terkirim, rekaman tidak: ${err}`,
+    meetingOpen: 'Buka di Orbita',
     recordingSaved: '🎙️ Rekaman disimpan di «Documents/Транскрибер»',
     dict: '📖 Kamus nama',
     dictHint:

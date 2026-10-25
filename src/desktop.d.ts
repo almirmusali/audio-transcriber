@@ -85,6 +85,14 @@ export interface DesktopApi {
   }>
   ideaEnabled: () => Promise<boolean>
   sendIdea: (text: string, audioPath?: string | null) => Promise<{ url: string }>
+  orbitaEnabled: () => Promise<boolean>
+  sendMeeting: (payload: {
+    text: string
+    segments: { start: number; end: number; text: string; speaker?: string }[]
+    durationSec?: number
+    at?: number
+    audioPath?: string | null
+  }) => Promise<{ url: string; audioError: string | null }>
   openExternal: (url: string) => Promise<void>
   saveAs: (defaultName: string, content: string) => Promise<string | null>
   reveal: (filePath: string) => Promise<void>

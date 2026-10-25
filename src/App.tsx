@@ -118,6 +118,16 @@ export default function App() {
   useEffect(() => {
     desktop?.ideaEnabled?.().then(setIdeaOn).catch(() => setIdeaOn(false))
   }, [])
+  const [orbitaOn, setOrbitaOn] = useState(false)
+  useEffect(() => {
+    desktop?.orbitaEnabled?.().then(setOrbitaOn).catch(() => setOrbitaOn(false))
+  }, [])
+  const [meeting, setMeeting] = useState<{
+    state: 'sending' | 'sent' | 'error'
+    url?: string
+    error?: string
+    audioError?: string | null
+  } | null>(null)
   const [idea, setIdea] = useState<{
     state: 'sending' | 'sent' | 'error'
     url?: string
@@ -217,6 +227,7 @@ export default function App() {
     setAiResult('')
     setAiError('')
     setIdea(null)
+    setMeeting(null)
     setNameReason(null)
     setStatus(isDesktop ? t.preparing : t.decoding)
     setFileName(name)
@@ -657,6 +668,29 @@ export default function App() {
     }
   }
 
+  // Совещание целиком уходит в Орбиту: текст с таймкодами (и спикерами, если размечены) и запись.
+  // Саммари на 1–2 страницы Орбита пишет сама.
+  async function sendToOrbita(content: string) {
+    if (!isDesktop || !final || meeting?.state === 'sending') return
+    setMeeting({ state: 'sending' })
+    const segments = final.replicas?.length
+      ? final.replicas.map((r) => ({ start: r.start, end: r.end, text: r.text, speaker: `${t.speaker} ${r.speaker}` }))
+      : final.segments.map((c) => ({ start: c.timestamp[0] ?? 0, end: c.timestamp[1] ?? c.timestamp[0] ?? 0, text: c.text }))
+    try {
+      const r = await desktop!.sendMeeting({
+        text: content,
+        segments,
+        durationSec: final.seconds || 0,
+        // начало встречи: запись только что закончилась, файл — время неизвестно, берём сейчас
+        at: Date.now() - (final.recordingPath ? (final.seconds || 0) * 1000 : 0),
+        audioPath: final.audioPath ?? null,
+      })
+      setMeeting({ state: 'sent', url: r.url, audioError: r.audioError })
+    } catch (err: any) {
+      setMeeting({ state: 'error', error: err?.message || String(err) })
+    }
+  }
+
   // ===== AI-обработка транскрипта через Claude API =====
   async function runAi(prompt: string) {
     const text = final?.text ?? ''
@@ -1015,6 +1049,16 @@ export default function App() {
                   {idea?.state === 'sending' ? t.ideaSending : t.idea}
                 </button>
               )}
+              {isDesktop && orbitaOn && !final.mdPath && (
+                <button
+                  className="btn"
+                  title={t.meetingTitle}
+                  disabled={meeting?.state === 'sending' || meeting?.state === 'sent'}
+                  onClick={() => sendToOrbita(plainText)}
+                >
+                  {meeting?.state === 'sending' ? t.meetingSending : t.meeting}
+                </button>
+              )}
               {final.srt && (
                 <button
                   className="btn"
@@ -1061,6 +1105,28 @@ export default function App() {
                 </button>
               )}
             </div>
+          )}
+
+          {meeting?.state === 'sent' && (
+            <div className="saved-note">
+              {t.meetingSent}
+              {meeting.url && (
+                <button
+                  className="link-btn"
+                  onClick={() => desktop!.openExternal(meeting.url!)}
+                >
+                  {t.meetingOpen}
+                </button>
+              )}
+            </div>
+          )}
+
+          {meeting?.state === 'sent' && meeting.audioError && (
+            <div className="error">⚠️ {t.meetingNoAudio(meeting.audioError)}</div>
+          )}
+
+          {meeting?.state === 'error' && (
+            <div className="error">⚠️ {meeting.error}</div>
           )}
 
           {idea?.state === 'error' && (

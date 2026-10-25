@@ -49,6 +49,9 @@ contextBridge.exposeInMainWorld('desktop', {
   ideaEnabled: () => ipcRenderer.invoke('idea-enabled'),
   sendIdea: (text, audioPath) =>
     ipcRenderer.invoke('send-idea', { text, audioPath: audioPath || null }),
+  // «Совещание в Орбиту» — только если адрес Орбиты настроен.
+  orbitaEnabled: () => ipcRenderer.invoke('orbita-enabled'),
+  sendMeeting: (payload) => ipcRenderer.invoke('send-meeting', payload),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   saveAs: (defaultName, content) =>
     ipcRenderer.invoke('save-as', defaultName, content),
