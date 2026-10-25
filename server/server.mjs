@@ -16,7 +16,7 @@ import { buildPrompt, promptArgs } from './whisper-dict.mjs'
 // чтобы телефон и десктоп размечали и отправляли одинаково.
 const require = createRequire(import.meta.url)
 const { diarize, toReplicas, wordsFromWhisperJson, replicasText, labelSrt } = require('../electron/diarize.cjs')
-const { orbitaUrls, sendMeeting } = require('../electron/orbita.cjs')
+const { orbitaUrls, sendMeeting, listProjects } = require('../electron/orbita.cjs')
 
 // Словарь длиннее лимита whisper — не молчим: тихо обрезанный словарь выглядит
 // как «словарь не работает», и искать это потом дорого.
@@ -284,9 +284,9 @@ const isLoopback = (u) => /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/|$)/
 // Совещание (текст с таймкодами, спикеры и запись) уходит в Орбиту, саммари пишет она.
 // Шлём с этого Mac, поэтому ответить может 127.0.0.1 — но ссылку открывать телефону,
 // и её даём на адрес в tailnet.
-async function sendToOrbita(j) {
+async function sendToOrbita(j, projectId = j.orbitaProject) {
   if (j.meeting?.state === 'sending') return
-  j.meeting = { state: 'sending' }
+  j.meeting = { state: 'sending', projectId: projectId || null }
   saveMeta(j)
   try {
     const r = await sendMeeting(
@@ -296,13 +296,14 @@ async function sendToOrbita(j) {
         durationSec: j.seconds || 0,
         at: j.recordedAt || j.createdAt - (j.fromMic ? (j.seconds || 0) * 1000 : 0),
         audioPath: j.sourceFile,
+        projectId,
       },
       FFMPEG,
     )
     let url = r.url
     const pub = orbitaUrls().find((u) => !isLoopback(u))
     if (pub && isLoopback(url)) url = pub + url.replace(/^https?:\/\/[^/]+/, '')
-    j.meeting = { state: 'sent', url, audioError: r.audioError || null, at: Date.now() }
+    j.meeting = { state: 'sent', url, audioError: r.audioError || null, at: Date.now(), projectId: projectId || null }
   } catch (err) {
     j.meeting = { state: 'error', error: err?.message || String(err) }
   }
@@ -471,6 +472,7 @@ function createJob(req, res, query) {
       speakers: query.get('speakers') === '1',
       speakerWord: (query.get('speakerWord') || 'Спикер').slice(0, 20),
       orbita: query.get('orbita') === '1',
+      orbitaProject: query.get('project') || null,
       // начало записи (мс) — телефон знает его точно, файл с телефона — нет
       recordedAt: Number(query.get('at')) || null,
       status: 'queued',
@@ -540,6 +542,20 @@ function cancelJob(j) {
   if (j.status === 'queued') setStatus(j, 'cancelled', { finishedAt: Date.now() })
 }
 
+function readJson(req) {
+  return new Promise((resolve) => {
+    let body = ''
+    req.on('data', (d) => (body += d))
+    req.on('end', () => {
+      try {
+        resolve(JSON.parse(body || '{}') || {})
+      } catch {
+        resolve({})
+      }
+    })
+  })
+}
+
 // Постобработка текста локальным Claude CLI (подписка, не API-ключ).
 function aiProcess(j, preset) {
   const PROMPTS = {
@@ -588,6 +604,15 @@ const server = http.createServer((req, res) => {
   }
 
   if (p === '/api/jobs' && req.method === 'POST') return createJob(req, res, url.searchParams)
+
+  if (p === '/api/orbita/projects') {
+    if (!orbitaUrls().length) return sendJson(res, 400, { error: 'Орбита не настроена на сервере' })
+    listProjects().then(
+      (projects) => sendJson(res, 200, { projects }),
+      (err) => sendJson(res, 502, { error: err.message || String(err) }),
+    )
+    return
+  }
 
   if (p === '/api/history') {
     const items = [...JOBS.values()]
@@ -644,15 +669,16 @@ const server = http.createServer((req, res) => {
       res.writeHead(200, { 'content-type': 'application/octet-stream' })
       return fs.createReadStream(j.sourceFile).pipe(res)
     }
-    if (sub === '/orbita' && req.method === 'POST') {
+    if (sub === '/orbita' && req.method === 'POST') return (async () => {
       if (!orbitaUrls().length) return sendJson(res, 400, { error: 'Орбита не настроена на сервере' })
       if (j.status !== 'done' || !j.text) return sendJson(res, 409, { error: 'Расшифровка ещё не готова' })
       if (j.meeting?.state === 'sent') return sendJson(res, 200, j.meeting)
+      const body = await readJson(req)
       // Аудио часового совещания льётся по tailnet минутами — отвечаем сразу,
       // за итогом клиент ходит в GET /api/jobs/:id (поле meeting).
-      sendToOrbita(j)
+      sendToOrbita(j, body.projectId || null)
       return sendJson(res, 202, j.meeting)
-    }
+    })()
     if (sub === '/ai' && req.method === 'POST') {
       let body = ''
       req.on('data', (d) => (body += d))

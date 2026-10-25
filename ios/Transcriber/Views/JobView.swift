@@ -113,17 +113,25 @@ struct JobView: View {
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.glassProminent).tint(.purple)
+                    if let name = OrbitaProjects.shared.name(m?.projectId) {
+                        Text("Проект: \(name)").font(.footnote)
+                    }
                     Text(m?.audioError.map { "Текст в Орбите, но запись не доехала: \($0)" }
                          ?? "Совещание в Орбите — саммари будет через пару минут")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
             default:
                 VStack(alignment: .leading, spacing: 6) {
-                    Button { Task { await sendToOrbita() } } label: {
-                        Label("Совещание в Орбиту", systemImage: "circle.hexagongrid")
+                    // Выбор проекта и есть отправка: по умолчанию отмечен проект из настроек записи.
+                    ProjectMenu(selected: settings.projectId) { p in
+                        Task { await sendToOrbita(projectId: p?.id) }
+                    } label: {
+                        Label("Совещание в Орбиту…", systemImage: "circle.hexagongrid")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.glassProminent).tint(.purple)
+                    Text("Нажми и выбери проект — совещание уйдёт в него")
+                        .font(.footnote).foregroundStyle(.secondary)
                     if let e = m?.error {
                         Text(e).font(.footnote).foregroundStyle(.red)
                     }
@@ -175,10 +183,11 @@ struct JobView: View {
         }
     }
 
-    private func sendToOrbita() async {
+    private func sendToOrbita(projectId: String?) async {
         guard let api = settings.api else { return }
+        job?.meeting = Meeting(state: "sending", projectId: projectId)
         do {
-            job?.meeting = try await api.sendToOrbita(jobId)
+            job?.meeting = try await api.sendToOrbita(jobId, projectId: projectId)
         } catch {
             job?.meeting = Meeting(state: "error", error: error.localizedDescription)
         }

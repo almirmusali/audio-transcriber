@@ -13,6 +13,7 @@ nonisolated struct Segment: Codable, Hashable {
 nonisolated struct Meeting: Codable, Hashable {
     var state: String // sending | sent | error
     var url: String?
+    var projectId: String?
     var error: String?
     var audioError: String?
 }
@@ -50,6 +51,15 @@ nonisolated struct HistoryItem: Codable, Identifiable, Hashable {
 
     var finished: Bool { ["done", "error", "cancelled"].contains(status) }
     var date: Date { Date(timeIntervalSince1970: createdAt / 1000) }
+}
+
+nonisolated struct OrbitaProject: Codable, Identifiable, Hashable {
+    let id: String
+    var name: String
+    var emoji: String?
+    var status: String?
+
+    var title: String { [emoji ?? "", name].filter { !$0.isEmpty }.joined(separator: " ") }
 }
 
 nonisolated struct Health: Codable {
@@ -99,8 +109,16 @@ nonisolated struct API: Sendable {
     }
     func job(_ id: String) async throws -> Job { try await get("api/jobs/\(id)") }
 
-    func sendToOrbita(_ id: String) async throws -> Meeting {
-        try await send("api/jobs/\(id)/orbita", method: "POST", body: Data("{}".utf8))
+    // projectId == nil — совещание без проекта
+    func sendToOrbita(_ id: String, projectId: String?) async throws -> Meeting {
+        let body = try JSONSerialization.data(withJSONObject: ["projectId": projectId.map { $0 as Any } ?? NSNull()])
+        return try await send("api/jobs/\(id)/orbita", method: "POST", body: body)
+    }
+
+    func orbitaProjects() async throws -> [OrbitaProject] {
+        struct R: Codable { var projects: [OrbitaProject] }
+        let r: R = try await get("api/orbita/projects")
+        return r.projects
     }
 
     func ai(_ id: String, preset: String) async throws -> String {
@@ -121,7 +139,7 @@ nonisolated struct API: Sendable {
     }
 
     // Загрузка записи: тело — сырые байты файла, параметры — в адресе.
-    func uploadRequest(name: String, lang: String, speakers: Bool, orbita: Bool,
+    func uploadRequest(name: String, lang: String, speakers: Bool, orbita: Bool, project: String?,
                        fromMic: Bool, at: Date) -> URLRequest {
         var c = URLComponents(url: base.appending(path: "api/jobs"), resolvingAgainstBaseURL: false)!
         c.queryItems = [
@@ -130,6 +148,7 @@ nonisolated struct API: Sendable {
             .init(name: "speakers", value: speakers ? "1" : "0"),
             .init(name: "speakerWord", value: "Спикер"),
             .init(name: "orbita", value: orbita ? "1" : "0"),
+            .init(name: "project", value: orbita ? project : nil),
             .init(name: "mic", value: fromMic ? "1" : "0"),
             .init(name: "at", value: String(Int(at.timeIntervalSince1970 * 1000))),
         ]

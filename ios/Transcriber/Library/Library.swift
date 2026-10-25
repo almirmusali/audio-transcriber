@@ -15,6 +15,7 @@ nonisolated struct LocalRecording: Codable, Identifiable, Hashable {
     var duration: Double = 0
     var fromMic: Bool
     var meeting: Bool
+    var projectId: String?
     var state: State
     var progress: Double = 0
     var error: String?
@@ -64,7 +65,8 @@ final class Library {
         let now = Date()
         let item = LocalRecording(file: "\(Self.stamp(now)).aac",
                                   name: (meeting ? "Совещание " : "Запись ") + Self.title(now),
-                                  startedAt: now, fromMic: true, meeting: meeting, state: .recording)
+                                  startedAt: now, fromMic: true, meeting: meeting,
+                                  projectId: settings.projectId, state: .recording)
         local.insert(item, at: 0)
         persist()
         return item
@@ -102,7 +104,7 @@ final class Library {
         // входящие копии из «Поделиться» система кладёт в Inbox — убираем за собой
         if url.path.contains("/Inbox/") { try? FileManager.default.removeItem(at: url) }
         let item = LocalRecording(file: file, name: name, startedAt: created, fromMic: false,
-                                  meeting: settings.meeting, state: .waiting)
+                                  meeting: settings.meeting, projectId: settings.projectId, state: .waiting)
         local.insert(item, at: 0)
         persist()
         upload(item.id)
@@ -118,7 +120,8 @@ final class Library {
         }
         let req = api.uploadRequest(name: item.name + "." + (item.file as NSString).pathExtension,
                                     lang: settings.lang, speakers: settings.speakers,
-                                    orbita: item.meeting, fromMic: item.fromMic, at: item.startedAt)
+                                    orbita: item.meeting, project: item.projectId,
+                                    fromMic: item.fromMic, at: item.startedAt)
         update(id) {
             $0.state = .uploading
             $0.progress = 0

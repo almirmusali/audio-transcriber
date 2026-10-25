@@ -53,7 +53,32 @@ async function postJson(url, body, ms) {
   return data
 }
 
-// payload: { text, segments: [{start, end, text, speaker?}], durationSec, at, audioPath }
+// Проекты Орбиты для выбора, куда положить совещание: живые (без «брошен» и «готово»),
+// сначала активные, внутри — по последнему касанию.
+const STATUS_ORDER = ['active', 'inbox', 'idea', 'task', 'paused']
+async function listProjects() {
+  let lastErr = null
+  for (const u of orbitaUrls()) {
+    try {
+      const res = await fetch(u + '/api/state', { signal: AbortSignal.timeout(10000) })
+      if (!res.ok) throw new Error(`Орбита ответила ${res.status}`)
+      const st = await res.json()
+      return (st.projects || [])
+        .filter((p) => STATUS_ORDER.includes(p.status))
+        .sort(
+          (a, b) =>
+            STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status) ||
+            (b.touchedAt || b.updatedAt || 0) - (a.touchedAt || a.updatedAt || 0),
+        )
+        .map((p) => ({ id: p.id, name: p.name, emoji: p.emoji || '', status: p.status, kind: p.kind }))
+    } catch (err) {
+      lastErr = err
+    }
+  }
+  throw new Error('Орбита недоступна (' + (lastErr?.message || 'не настроена') + ').')
+}
+
+// payload: { text, segments: [{start, end, text, speaker?}], durationSec, at, audioPath, projectId? }
 async function sendMeeting(payload, ffmpeg) {
   const text = String(payload?.text || '').trim()
   if (!text) throw new Error('Нет текста совещания')
@@ -70,6 +95,7 @@ async function sendMeeting(payload, ffmpeg) {
         segments: payload.segments || [],
         durationSec: payload.durationSec || 0,
         at: payload.at || Date.now(),
+        projectId: payload.projectId || null,
         source: 'транскрибер',
       }, 30000)
       base = u
@@ -109,4 +135,4 @@ async function sendMeeting(payload, ffmpeg) {
   return result
 }
 
-module.exports = { orbitaUrls, sendMeeting }
+module.exports = { orbitaUrls, sendMeeting, listProjects }

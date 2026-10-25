@@ -14,6 +14,9 @@ final class Settings {
     var lang: String { didSet { save("lang", lang) } }
     var speakers: Bool { didSet { save("speakers", speakers) } }
     var meeting: Bool { didSet { save("meeting", meeting) } }
+    // Проект Орбиты, куда кладутся совещания с телефона; nil — без проекта.
+    var projectId: String? { didSet { save("projectId", projectId ?? "") } }
+    var projectName: String? { didSet { save("projectName", projectName ?? "") } }
 
     static let languages: [(code: String, name: String)] = [
         ("auto", "Определять сам"), ("ru", "Русский"), ("id", "Bahasa Indonesia"), ("en", "English"),
@@ -25,6 +28,8 @@ final class Settings {
         lang = d.string(forKey: "lang") ?? "auto"
         speakers = d.object(forKey: "speakers") as? Bool ?? true
         meeting = d.object(forKey: "meeting") as? Bool ?? true
+        projectId = d.string(forKey: "projectId").flatMap { $0.isEmpty ? nil : $0 }
+        projectName = d.string(forKey: "projectName").flatMap { $0.isEmpty ? nil : $0 }
     }
 
     var api: API? {

@@ -108,6 +108,19 @@ struct RecordPanel: View {
                 Toggle(isOn: $settings.meeting) {
                     Label("Совещание → в Орбиту", systemImage: "circle.hexagongrid")
                 }
+                if settings.meeting {
+                    ProjectMenu(selected: settings.projectId) { p in
+                        settings.projectId = p?.id
+                        settings.projectName = p?.title
+                    } label: {
+                        HStack {
+                            Label("Проект", systemImage: "folder.badge.person.crop").foregroundStyle(.primary)
+                            Spacer()
+                            Text(settings.projectName ?? "Без проекта").lineLimit(1).foregroundStyle(.secondary)
+                            Image(systemName: "chevron.up.chevron.down").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
                 Toggle(isOn: $settings.speakers) {
                     Label("Кто говорит", systemImage: "person.2.wave.2")
                 }
